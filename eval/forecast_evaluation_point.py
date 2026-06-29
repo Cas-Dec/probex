@@ -31,10 +31,30 @@ import xarray as xr
 
 import functions
 
+MODEL_CONFIG = {
+    "GenCast": {
+        "leads": [12, 24, 36, 48, 60, 72, 84, 96, 108, 120,
+                  132, 144, 156, 168, 180, 192, 204, 216, 228, 240],
+        "n_members": 50,
+        "resolution_tag": "0p25",
+    },
+    "IFS_ENS": {
+        "leads": [12, 24, 36, 48, 60, 72, 84, 96, 108, 120,
+                  132, 144, 156, 168, 180, 192, 204, 216, 228, 240],
+        "n_members": 50,
+        "resolution_tag": "0p25",
+    },
+    "ArchesWeatherGen": {
+        "leads": [48, 120, 168, 240],
+        "n_members": 64,
+        "resolution_tag": "1p50",
+    },
+}
+
 parser = argparse.ArgumentParser()
-parser.add_argument("--year", type=int, default=2020, choices=[2018, 2020])
+parser.add_argument("--year", type=int, default=2020, choices=[2018, 2020, 2022])
 parser.add_argument("--var", type=str, default="t2m", choices=["t2m", "w10"])
-parser.add_argument("--model", type=str, default="GenCast", choices=["GenCast", "IFS_ENS"])
+parser.add_argument("--model", type=str, default="GenCast", choices=["GenCast", "IFS_ENS", "ArchesWeatherGen"])
 parser.add_argument("--truth", type=str, default="ERA5", choices=["ERA5", "HRES_fc0"])
 parser.add_argument("--record-tag", type=str, default="1979_2018")
 args = parser.parse_args()
@@ -48,28 +68,20 @@ model = args.model
 truth = args.truth
 record_tag = args.record_tag
 
+config = MODEL_CONFIG[model]
+leads = config["leads"]
+n_members = config["n_members"]
+resolution_tag = config["resolution_tag"]
+
 if var == "t2m":
     variable = "2m_temperature"
 elif var == "w10":
     variable = "10m_wind_speed"
 
-leads = [12, 24, 36, 48, 60, 72, 84, 96, 108, 120,
-         132, 144, 156, 168, 180, 192, 204, 216, 228, 240]
-
-# For debugging:
-leads = [24]
-
-n_members = 50
-# For debugging:
-n_members = 1
-
 eval_start = datetime(year, 1, 1, 0)
 eval_end = datetime(year, 12, 31, 18)
 
 no_Antarctic = dict(latitude=slice(-60, 90), longitude=slice(-180, 180))
-
-# For debugging:
-no_Antarctic = dict(latitude=slice(-10, 10), longitude=slice(-10, 10))
 
 cases = ["max", "all"]
 
@@ -166,7 +178,7 @@ for i, lead_hour in enumerate(leads, start=1):
 
     forecast_file = (
         data_dir / model
-        / f"{model}_{year}_no_Antarctic_{var}_m{n_members}_0p25_lead_{lead_hour:03d}h.zarr"
+        / f"{model}_{year}_no_Antarctic_{var}_m{n_members}_{resolution_tag}_lead_{lead_hour:03d}h.zarr"
     )
 
     print("\n" + "=" * 80)
