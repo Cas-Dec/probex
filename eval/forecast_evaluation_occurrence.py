@@ -28,12 +28,17 @@ MODEL_CONFIG = {
         "n_members": 64,
         "resolution_tag": "1p50",
     },
+    "uCast": {
+        "leads": [12, 48, 120, 168, 240],
+        "n_members": 63,
+        "resolution_tag": "1p50",
+    },
 }
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--year", type=int, default=2020, choices=[2018, 2020, 2022])
 parser.add_argument("--var", type=str, default="t2m", choices=["t2m", "w10"])
-parser.add_argument("--model", type=str, default="GenCast", choices=["GenCast", "IFS_ENS", "ArchesWeatherGen"])
+parser.add_argument("--model", type=str, default="GenCast", choices=["GenCast", "IFS_ENS", "ArchesWeatherGen", "uCast"])
 parser.add_argument("--truth", type=str, default="ERA5", choices=["ERA5", "HRES_fc0"])
 parser.add_argument("--record-tag", type=str, default="1979_2018")
 args = parser.parse_args()
