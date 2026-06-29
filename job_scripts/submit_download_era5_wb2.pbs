@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+# name as it appears in qstat
+#PBS -N era52020
+#PBS -l walltime=04:00:00
+#PBS -l nodes=1:ppn=2
+#PBS -l mem=16gb
+#PBS -j oe
+#PBS -t 1-2%2
+
+set -euo pipefail
+
+cd "${PBS_O_WORKDIR}"
+
+mkdir -p logs
+TASK_ID="${PBS_ARRAYID}"
+
+exec > "logs/era5_2020_${TASK_ID}.log" 2>&1
+
+echo "Running ERA5 array task"
+echo "task id = ${TASK_ID}"
+date
+hostname
+
+VARIABLES=("2m_temperature" "10m_wind_speed")
+
+IDX=$((TASK_ID - 1))
+VARIABLE="${VARIABLES[$IDX]}"
+
+echo "Decoded task"
+echo "variable = ${VARIABLE}"
+
+bash bash_scripts/run_download_era5_wb2.sh "${VARIABLE}"
+
+echo "Finished ERA5 array task"
+date

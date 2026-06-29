@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+# name as it appears in qstat
+#PBS -N gencast2020 
+#PBS -l walltime=08:00:00
+#PBS -l nodes=1:ppn=2
+#PBS -l mem=32gb
+#PBS -j oe
+#PBS -t 1-40%4 
+# array job with in total 40 tasks (2 variables, 20 leadtimes), at most 4 at the same time ...
+set -euo pipefail # Stop if:a command fails , an undefined variable is used , or one command in a pipe fails
+
+# Go to the directory from which the job was submitted.
+# Submit from the project root.
+cd "${PBS_O_WORKDIR}"
+
+TASK_ID="${PBS_ARRAYID}"
+
+exec > "logs/gencast_2020_${TASK_ID}.log" 2>&1
+
+echo "Running GenCast array task"
+echo "task id = ${TASK_ID}"
+date
+hostname
+
+VARIABLES=("2m_temperature" "10m_wind_speed")
+LEADS=(12 24 36 48 60 72 84 96 108 120 132 144 156 168 180 192 204 216 228 240)
+
+IDX=$((TASK_ID - 1)) # PBS task IDs start at 1, but bash array indices start at 0 ...
+
+N_LEADS=${#LEADS[@]} 
+# ordering: 
+# task 1: 2m_temperature, lead 12
+# task 2: 2m_temperature, lead 24
+# ....
+# task 20: 2m_temperature, lead 240
+# task 21: 10m_wind_speed, lead 12
+# ...
+# task 40: 10m_wind_speed, lead 240
+
+VARIABLE_IDX=$((IDX / N_LEADS))
+LEAD_IDX=$((IDX % N_LEADS))
+
+VARIABLE="${VARIABLES[$VARIABLE_IDX]}"
+LEAD_HOUR="${LEADS[$LEAD_IDX]}"
+
+echo "Decoded task"
+echo "variable  = ${VARIABLE}"
+echo "lead hour = ${LEAD_HOUR}"
+bash bash_scripts/run_download_gencast_wb2.sh "${VARIABLE}" "${LEAD_HOUR}" # activates virtual environment and runs python script
+echo "Finished GenCast array task"
+date
