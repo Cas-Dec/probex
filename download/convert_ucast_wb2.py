@@ -10,11 +10,11 @@ Writes to data/uCast/:
     uCast_{year}_no_Antarctic_w10_m{N}_1p50_lead_{LLL}h.zarr
 
 Transformations applied:
-    - Drop NaN entries in longitude (index 0) and ensemble_member (index 0) — data bug
-      in source file; the 0 deg longitude column is permanently absent from the output
+    - Fix NaN coordinate metadata at index 0 for longitude (0.0°) and
+      ensemble_member (0) — both axes carry real data; only the label is wrong
     - Rename: init_time -> time, ensemble_member -> number, lead_time -> prediction_timedelta
     - Convert lead_time from timedelta64[ns] to integer hours
-    - Re-index number to 0-based int32 (source has values 1-63 after NaN drop)
+    - Re-index number to 0-based int32 (source values 0-63)
     - Longitude 0-360 -> -180-180, sorted
     - Clip to no_Antarctic domain (-60 to 90); latitude is already ascending
     - Transpose to (time, number, prediction_timedelta, latitude, longitude)
@@ -25,13 +25,29 @@ Transformations applied:
 from __future__ import annotations
 
 import argparse
+import os
 from pathlib import Path
 
 import numpy as np
 import xarray as xr
 
-DEFAULT_IN_ZARR = (
-    "/data/gent/vo/000/gvo00090/HEAT/Data/forecasts/ucast_forecasts_2022.zarr"
+
+def _load_dotenv(path: str = ".env") -> None:
+    try:
+        with open(path) as fh:
+            for line in fh:
+                line = line.strip()
+                if line and not line.startswith("#") and "=" in line:
+                    k, v = line.split("=", 1)
+                    os.environ.setdefault(k.strip(), v.strip())
+    except FileNotFoundError:
+        pass
+
+_load_dotenv()
+
+DEFAULT_IN_ZARR = os.environ.get(
+    "UCAST_FORECASTS_2022",
+    "/data/gent/vo/000/gvo00090/HEAT/Data/forecasts/ucast_forecasts_2022.zarr",
 )
 
 parser = argparse.ArgumentParser()
@@ -59,11 +75,16 @@ print()
 print("Opening source Zarr...")
 ds = xr.open_zarr(in_zarr, chunks={}, consolidated=False)
 
-# Drop NaN coordinate entries (data bug: index 0 is NaN for both
-# longitude and ensemble_member).  The 0 deg longitude column is lost.
-valid_lon = ~np.isnan(ds.longitude.values)
-valid_mem = ~np.isnan(ds.ensemble_member.values)
-ds = ds.isel(longitude=valid_lon, ensemble_member=valid_mem)
+# Source file has NaN as the coordinate label at index 0 for both longitude
+# and ensemble_member; the underlying data is valid.  Patch the labels in
+# place: longitude step is 1.5° so index 0 is 0.0°; members are 0-based.
+lon_vals = ds.longitude.values.copy()
+lon_vals[0] = 0.0
+ds = ds.assign_coords(longitude=lon_vals)
+
+mem_vals = ds.ensemble_member.values.copy()
+mem_vals[0] = 0.0
+ds = ds.assign_coords(ensemble_member=mem_vals)
 
 # Convert lead_time from timedelta64[ns] to integer hours.
 lead_hours = (ds.lead_time.values.astype("int64") // 3_600_000_000_000).astype("int32")
@@ -76,7 +97,7 @@ ds = ds.rename({
     "lead_time": "prediction_timedelta",
 })
 
-# Re-index members to 0-based int32 (source values were 1-63 after NaN drop).
+# Re-index members to 0-based int32 (source values are 0.0-63.0 as float).
 n_members = ds.sizes["number"]
 ds = ds.assign_coords(number=np.arange(n_members, dtype="int32"))
 
@@ -95,7 +116,7 @@ print(f"leads (h)  : {leads}")
 print(f"lat range  : {float(ds.latitude.min()):.1f} to {float(ds.latitude.max()):.1f}  "
       f"({ds.sizes['latitude']} points)")
 print(f"lon range  : {float(ds.longitude.min()):.1f} to {float(ds.longitude.max()):.1f}  "
-      f"({ds.sizes['longitude']} points, 0 deg missing due to source NaN bug)")
+      f"({ds.sizes['longitude']} points)")
 print()
 
 VARIABLES = {

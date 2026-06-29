@@ -12,7 +12,8 @@ MARGIN_STEP="${7:-0.25}"
 PROJECT_ROOT="${PBS_O_WORKDIR:-$(pwd)}"
 cd "${PROJECT_ROOT}"
 
-source "${HOME}/venvs/weatherbench/bin/activate"
+source "$(conda info --base)/etc/profile.d/conda.sh"
+conda activate probex
 
 mkdir -p logs "results/${MODEL}/Margin"
 

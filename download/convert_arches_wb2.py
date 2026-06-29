@@ -26,14 +26,29 @@ native 1.5 degree grid; update the path in the eval scripts accordingly.
 from __future__ import annotations
 
 import argparse
+import os
 from pathlib import Path
 
 import numpy as np
 import xarray as xr
 
-DEFAULT_IN_ZARR = (
-    "/data/gent/vo/000/gvo00090/HEAT/Data/forecasts/"
-    "ArchesWeatherGen/arches_2022_ensemble.zarr"
+
+def _load_dotenv(path: str = ".env") -> None:
+    try:
+        with open(path) as fh:
+            for line in fh:
+                line = line.strip()
+                if line and not line.startswith("#") and "=" in line:
+                    k, v = line.split("=", 1)
+                    os.environ.setdefault(k.strip(), v.strip())
+    except FileNotFoundError:
+        pass
+
+_load_dotenv()
+
+DEFAULT_IN_ZARR = os.environ.get(
+    "ARCHESWEATHERGEN_FORECASTS_2022",
+    "/data/gent/vo/000/gvo00090/HEAT/Data/forecasts/archesweathergen_forecasts_2022.zarr",
 )
 
 parser = argparse.ArgumentParser()

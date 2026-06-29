@@ -8,10 +8,22 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Environment
 
-Activate the Python environment before running any eval or download scripts:
+The project uses the `probex` conda environment. Create it once from the repo root:
 
 ```bash
-source ~/venvs/weatherbench/bin/activate
+conda env create -f environment.yaml   # first time
+conda activate probex                  # each session
+```
+
+The bash scripts activate the environment automatically (via `conda info --base`), so
+PBS jobs do not need a manual `conda activate` before submission.
+
+The conversion scripts (`download/convert_*.py`) additionally require the `geoarches`
+conda environment, which ships the ArchesWeatherGen and uCast model code:
+
+```bash
+conda run -n geoarches python download/convert_arches_wb2.py
+conda run -n geoarches python download/convert_ucast_wb2.py
 ```
 
 If scripts were edited on Windows, fix line endings first:
@@ -60,6 +72,7 @@ bash bash_scripts/run_eval_margin.sh GenCast t2m 2020 ERA5 1979_2018 6.0 0.25
 
 ```bash
 cd <project_root>
+conda activate probex
 python -u eval/forecast_evaluation_crps.py --year 2020 --var t2m --model GenCast --truth ERA5
 python -u eval/forecast_evaluation_point.py --year 2020 --var t2m --model GenCast --truth ERA5
 python -u eval/forecast_evaluation_occurrence.py --year 2020 --var t2m --model GenCast --truth ERA5

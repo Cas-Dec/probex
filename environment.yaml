@@ -1,0 +1,19 @@
+name: probex
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.11
+  - pip
+  - pip:
+    - numpy>=2.0
+    - xarray>=2025.1
+    - dask>=2024.12
+    - pandas>=2.2
+    - zarr>=3.0
+    - netcdf4>=1.7
+    - cftime>=1.6
+    - fsspec>=2024.12
+    - gcsfs>=2024.12
+    - scipy>=1.15
+    - matplotlib>=3.10

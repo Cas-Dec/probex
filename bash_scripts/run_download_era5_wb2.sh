@@ -5,7 +5,8 @@ VARIABLE="${1:-2m_temperature}"
 
 # run from directory from which we submitted
 cd "${PBS_O_WORKDIR}"
-source "${HOME}/venvs/weatherbench/bin/activate"
+source "$(conda info --base)/etc/profile.d/conda.sh"
+conda activate probex
 
 echo "Running ERA5 download"
 echo "variable    = ${VARIABLE}"
