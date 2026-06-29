@@ -10,10 +10,13 @@ Writes to data/uCast/:
     uCast_{year}_no_Antarctic_w10_m{N}_1p50_lead_{LLL}h.zarr
 
 Transformations applied:
+    - Check and patch missing coordinate data (lead_time, init_time) if the
+      zarr ships positional indices instead of real values (see
+      _check_and_fix_ucast_coords); no-op once the upstream zarr is fixed
     - Fix NaN coordinate metadata at index 0 for longitude (0.0°) and
       ensemble_member (0) — both axes carry real data; only the label is wrong
     - Rename: init_time -> time, ensemble_member -> number, lead_time -> prediction_timedelta
-    - Convert lead_time from timedelta64[ns] to integer hours
+    - Convert lead_time to integer hours
     - Re-index number to 0-based int32 (source values 0-63)
     - Longitude 0-360 -> -180-180, sorted
     - Clip to no_Antarctic domain (-60 to 90); latitude is already ascending
@@ -26,10 +29,90 @@ from __future__ import annotations
 
 import argparse
 import os
+import warnings
 from pathlib import Path
 
 import numpy as np
+import pandas as pd
 import xarray as xr
+
+# Known uCast lead times in hours — used only as fallback when the zarr
+# coordinate arrays are missing (positional-index bug).
+_KNOWN_LEAD_HOURS = [12, 48, 120, 168, 240]
+
+
+def _check_and_fix_ucast_coords(ds: xr.Dataset) -> xr.Dataset:
+    """
+    Detect and patch missing coordinate data in the uCast zarr.
+
+    Some exports store lead_time and init_time as bare positional integer
+    indices rather than actual timedelta/datetime values (the chunk files for
+    those coordinates are absent from the zarr).  When that is detected the
+    function patches in the known-correct values and emits a warning so the
+    caller is informed.
+
+    Once the upstream zarr is fixed this function becomes a no-op: xarray
+    will decode the coordinates to timedelta64/datetime64 dtypes, which
+    causes both guards to pass without any patching.
+    """
+    # --- lead_time ---
+    lt = ds.lead_time.values
+    if np.issubdtype(lt.dtype, np.timedelta64):
+        # Properly decoded by xarray — nothing to do.
+        pass
+    elif lt.max() < 3600:
+        # Positional indices (0-4): patch with known lead hours expressed as
+        # nanoseconds so the existing conversion formula (// 3_600_000_000_000)
+        # continues to work unchanged.
+        warnings.warn(
+            f"uCast lead_time looks like positional indices (max={lt.max()}); "
+            f"patching with known leads {_KNOWN_LEAD_HOURS} h.",
+            stacklevel=2,
+        )
+        ns_per_hour = 3_600_000_000_000
+        ds = ds.assign_coords(
+            lead_time=np.array(
+                [h * ns_per_hour for h in _KNOWN_LEAD_HOURS], dtype="int64"
+            )
+        )
+    else:
+        warnings.warn(
+            f"uCast lead_time has unexpected integer values (max={lt.max()}); "
+            "treating as raw seconds and converting to nanoseconds.",
+            stacklevel=2,
+        )
+        ds = ds.assign_coords(lead_time=(lt * 1_000_000_000).astype("int64"))
+
+    # --- init_time ---
+    it = ds.init_time.values
+    if np.issubdtype(it.dtype, np.datetime64):
+        # Properly decoded by xarray — nothing to do.
+        pass
+    elif it.max() < 1_000_000:
+        # Positional indices (0-729): reconstruct as 00Z/12Z timestamps for
+        # the forecast year.  n is used instead of a hardcoded 730 so the
+        # function generalises to other year lengths.
+        n = ds.sizes["init_time"]
+        warnings.warn(
+            f"uCast init_time looks like positional indices (max={it.max()}); "
+            f"patching with {n} steps at 12-hour frequency starting 2022-01-01.",
+            stacklevel=2,
+        )
+        ds = ds.assign_coords(
+            init_time=pd.date_range("2022-01-01", periods=n, freq="12h")
+        )
+    else:
+        # Raw Unix seconds — decode directly.
+        warnings.warn(
+            f"uCast init_time has unexpected integer values (max={it.max()}); "
+            "treating as Unix seconds.",
+            stacklevel=2,
+        )
+        ds = ds.assign_coords(
+            init_time=pd.to_datetime(it, unit="s", utc=True).tz_localize(None)
+        )
+
+    return ds
 
 
 def _load_dotenv(path: str = ".env") -> None:
@@ -74,6 +157,7 @@ print()
 
 print("Opening source Zarr...")
 ds = xr.open_zarr(in_zarr, chunks={}, consolidated=False)
+ds = _check_and_fix_ucast_coords(ds)
 
 # Source file has NaN as the coordinate label at index 0 for both longitude
 # and ensemble_member; the underlying data is valid.  Patch the labels in
