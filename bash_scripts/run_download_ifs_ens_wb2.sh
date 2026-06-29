@@ -12,13 +12,13 @@ conda activate probex
 echo "Running IFS ENS download"
 echo "variable    = ${VARIABLE}"
 echo "lead hour   = ${LEAD_HOUR}"
-echo "year        = 2020"
+echo "year        = 2022"
 echo "working dir = $(pwd)"
 date
 hostname
 
 python -u download/download_ifs_ens_wb2.py \
-  --year 2020 \
+  --year 2022 \
   --variable "${VARIABLE}" \
   --lead-hour "${LEAD_HOUR}" \
   --out-root "data/IFS_ENS"

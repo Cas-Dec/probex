@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+VARIABLE="${1:-2m_temperature}"
+LEAD_HOUR="${2:-24}"
+
+# run from directory from which we submitted
+cd "${PBS_O_WORKDIR}"
+source "$(conda info --base)/etc/profile.d/conda.sh"
+conda activate probex
+
+echo "Running FGN download"
+echo "variable    = ${VARIABLE}"
+echo "lead hour   = ${LEAD_HOUR}"
+echo "year        = 2022"
+echo "working dir = $(pwd)"
+date
+hostname
+
+python -u download/download_fgn_wb2.py \
+  --year 2022 \
+  --variable "${VARIABLE}" \
+  --lead-hour "${LEAD_HOUR}" \
+  --out-root "data/FGN"
+
+echo "Finished single lead FGN download"
+date

@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # name as it appears in qstat
-#PBS -N ifsens2020
+#PBS -N ifsens2022
 #PBS -l walltime=08:00:00
 #PBS -l nodes=1:ppn=2
 #PBS -l mem=32gb
 #PBS -j oe
-#PBS -t 1-40%4
+#PBS -t 1-10%4
 
 set -euo pipefail
 
@@ -14,7 +14,7 @@ cd "${PBS_O_WORKDIR}"
 mkdir -p logs
 TASK_ID="${PBS_ARRAYID}"
 
-exec > "logs/ifs_ens_2020_${TASK_ID}.log" 2>&1
+exec > "logs/ifs_ens_2022_${TASK_ID}.log" 2>&1
 
 echo "Running IFS ENS array task"
 echo "task id = ${TASK_ID}"
@@ -22,7 +22,7 @@ date
 hostname
 
 VARIABLES=("2m_temperature" "10m_wind_speed")
-LEADS=(12 24 36 48 60 72 84 96 108 120 132 144 156 168 180 192 204 216 228 240)
+LEADS=(12 48 120 168 240)
 
 IDX=$((TASK_ID - 1))
 

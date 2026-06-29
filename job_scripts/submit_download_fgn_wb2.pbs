@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+#PBS -N fgn2022
+#PBS -l walltime=08:00:00
+#PBS -l nodes=1:ppn=2
+#PBS -l mem=32gb
+#PBS -j oe
+#PBS -t 1-10%4
+
+set -euo pipefail
+
+cd "${PBS_O_WORKDIR}"
+
+mkdir -p logs
+TASK_ID="${PBS_ARRAYID}"
+
+exec > "logs/fgn_2022_${TASK_ID}.log" 2>&1
+
+echo "Running FGN array task"
+echo "task id = ${TASK_ID}"
+date
+hostname
+
+VARIABLES=("2m_temperature" "10m_wind_speed")
+LEADS=(12 48 120 168 240)
+
+IDX=$((TASK_ID - 1))
+
+N_LEADS=${#LEADS[@]}
+
+VARIABLE_IDX=$((IDX / N_LEADS))
+LEAD_IDX=$((IDX % N_LEADS))
+
+VARIABLE="${VARIABLES[$VARIABLE_IDX]}"
+LEAD_HOUR="${LEADS[$LEAD_IDX]}"
+
+echo "Decoded task"
+echo "variable  = ${VARIABLE}"
+echo "lead hour = ${LEAD_HOUR}"
+
+bash bash_scripts/run_download_fgn_wb2.sh "${VARIABLE}" "${LEAD_HOUR}"
+
+echo "Finished FGN array task"
+date
