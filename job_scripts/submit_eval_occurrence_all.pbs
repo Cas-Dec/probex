@@ -1,0 +1,55 @@
+#!/usr/bin/env bash
+# Comprehensive occurrence evaluation for all 5 models
+#PBS -N eval_occ_all
+#PBS -l walltime=08:00:00
+#PBS -l nodes=1:ppn=4
+#PBS -l mem=48gb
+#PBS -j oe
+#PBS -t 1-8%2
+
+set -euo pipefail
+
+cd "${PBS_O_WORKDIR}"
+mkdir -p logs
+
+TASK_ID="${PBS_ARRAYID}"
+IDX=$((TASK_ID - 1))
+
+# Tasks 1-8: 4 models × 2 variables (GenCast removed)
+MODELS=("IFS_ENS" "IFS_ENS" "ArchesWeatherGen" "ArchesWeatherGen" "uCast" "uCast" "FGN" "FGN")
+VARS=("t2m" "w10" "t2m" "w10" "t2m" "w10" "t2m" "w10")
+
+MODEL="${MODELS[$IDX]}"
+VAR="${VARS[$IDX]}"
+YEAR="${YEAR:-2022}"
+
+# Set model-specific truth: IFS_ENS uses HRES_fc0, others use ERA5
+if [ "${MODEL}" == "IFS_ENS" ]; then
+    TRUTH="${TRUTH:-HRES_fc0}"
+else
+    TRUTH="${TRUTH:-ERA5}"
+fi
+
+RECORD_TAG="${RECORD_TAG:-1979_2018}"
+
+exec > "logs/eval_occurrence_${YEAR}_${MODEL}_${VAR}_${TASK_ID}.log" 2>&1
+
+export OMP_NUM_THREADS=1
+export MKL_NUM_THREADS=1
+export OPENBLAS_NUM_THREADS=1
+export NUMEXPR_NUM_THREADS=1
+
+echo "Running occurrence eval array task"
+echo "task id    = ${TASK_ID}"
+echo "model      = ${MODEL}"
+echo "variable   = ${VAR}"
+echo "year       = ${YEAR}"
+echo "truth      = ${TRUTH}"
+echo "records    = ${RECORD_TAG}"
+date
+hostname
+
+bash bash_scripts/run_eval_occurrence.sh "${MODEL}" "${VAR}" "${YEAR}" "${TRUTH}" "${RECORD_TAG}"
+
+echo "Finished occurrence eval array task"
+date

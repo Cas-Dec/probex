@@ -21,7 +21,7 @@ python -u download/download_ifs_ens_wb2.py \
   --year 2022 \
   --variable "${VARIABLE}" \
   --lead-hour "${LEAD_HOUR}" \
-  --out-root "data/IFS_ENS"
+  --out-root "/data/gent/vo/000/gvo00090/HEAT/Data/forecasts/IFS_ENS"
 
 echo "Finished single lead IFS ENS download"
 date

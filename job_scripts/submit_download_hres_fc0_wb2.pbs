@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # name as it appears in qstat
-#PBS -N hresfc02020
+#PBS -N hresfc02022
 #PBS -l walltime=04:00:00
 #PBS -l nodes=1:ppn=2
 #PBS -l mem=16gb
@@ -14,7 +14,7 @@ cd "${PBS_O_WORKDIR}"
 mkdir -p logs
 TASK_ID="${PBS_ARRAYID}"
 
-exec > "logs/hres_fc0_2020_${TASK_ID}.log" 2>&1
+exec > "logs/hres_fc0_2022_${TASK_ID}.log" 2>&1
 
 echo "Running HRES-fc0 array task"
 echo "task id = ${TASK_ID}"

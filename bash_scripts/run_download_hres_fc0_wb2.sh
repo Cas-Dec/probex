@@ -10,15 +10,15 @@ conda activate probex
 
 echo "Running HRES-fc0 download"
 echo "variable    = ${VARIABLE}"
-echo "year        = 2020"
+echo "year        = 2022"
 echo "working dir = $(pwd)"
 date
 hostname
 
 python -u download/download_hres_fc0_wb2.py \
-  --year 2020 \
+  --year 2022 \
   --variable "${VARIABLE}" \
-  --out-root "data/HRES_fc0"
+  --out-root "/data/gent/vo/000/gvo00090/HEAT/Data/forecasts/HRES_fc0"
 
 echo "Finished HRES-fc0 download"
 date

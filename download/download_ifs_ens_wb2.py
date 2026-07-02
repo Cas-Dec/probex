@@ -1,8 +1,8 @@
 """
 Download one single-lead IFS ENS chunk from WeatherBench 2.
 
-Source bucket covers 2018-2022; 2022 has 730 init times at 00Z and 12Z,
-50 ensemble members (1-based), 6-hourly leads 0-360 h, 0.25° grid.
+Source bucket covers 2016-2024; 2022 has 730 init times at 00Z and 12Z,
+50 ensemble members (1-based), 6-hourly leads 0-360 h, 1.5° grid (240x121 equiangular).
 
 Output dims: time, number, prediction_timedelta, latitude, longitude
 """
@@ -14,7 +14,7 @@ from pathlib import Path
 
 import xarray as xr
 
-IFS_ZARR = "gs://weatherbench2/datasets/ifs_ens/2018-2022-1440x721.zarr"
+IFS_ZARR = "gs://weatherbench2/datasets/ifs_ens/2016-2024-240x121_equiangular_with_poles_conservative.zarr"
 N_MEMBERS = 50
 
 parser = argparse.ArgumentParser(description="Download a single-lead IFS ENS chunk from WB2.")
@@ -27,7 +27,7 @@ parser.add_argument("--variable", type=str, default="2m_temperature",
                     help="WeatherBench 2 variable name.")
 parser.add_argument("--lead-hour", type=int, default=24,
                     help="Lead time in hours.")
-parser.add_argument("--out-root", type=str, default="data/IFS_ENS",
+parser.add_argument("--out-root", type=str, default="/data/gent/vo/000/gvo00090/HEAT/Data/forecasts/IFS_ENS",
                     help="Output directory.")
 args = parser.parse_args()
 
@@ -42,7 +42,7 @@ var = "t2m" if variable == "2m_temperature" else "w10"
 
 out_file = (out_root
             / f"IFS_ENS_{year}_{region}_{var}"
-              f"_m{N_MEMBERS}_0p25_lead_{lead_hour:03d}h.zarr")
+              f"_m{N_MEMBERS}_1p50_lead_{lead_hour:03d}h.zarr")
 
 print("----------------------------------------------")
 print("Download a single lead of IFS ENS from WeatherBench 2.")

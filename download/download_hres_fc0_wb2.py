@@ -2,6 +2,7 @@
 Download HRES-fc0 verification data from WeatherBench 2.
     variable: 2m_temperature or 10m_wind_speed
     dims: time, prediction_timedelta, latitude, longitude
+    resolution: 1.5° (240x121 equiangular)
 """
 
 from __future__ import annotations
@@ -9,14 +10,14 @@ import argparse
 from pathlib import Path
 import xarray as xr
 
-HRES_ZARR = "gs://weatherbench2/datasets/hres/2016-2022-0012-1440x721.zarr"
+HRES_ZARR = "gs://weatherbench2/datasets/hres/2016-2022-0012-240x121_equiangular_with_poles_conservative.zarr"
 
 parser = argparse.ArgumentParser(description="Download HRES-fc0 data from WB2.")
 parser.add_argument("--zarr-bucket", type=str, default=HRES_ZARR, help="weatherbench2 Zarr bucket to read from.")
-parser.add_argument("--year", type=int, default=2020, choices=[2018, 2020], help="Verification year.")
+parser.add_argument("--year", type=int, default=2022, choices=[2018, 2020, 2022], help="Verification year.")
 parser.add_argument("--variable", type=str, default="2m_temperature", choices=["2m_temperature", "10m_wind_speed"],
 help="WeatherBench 2 variable name.")
-parser.add_argument("--out-root", type=str, default="Data/HRES_fc0", help="Output directory.")
+parser.add_argument("--out-root", type=str, default="/data/gent/vo/000/gvo00090/HEAT/Data/forecasts/HRES_fc0", help="Output directory.")
 args = parser.parse_args()
 
 out_root = Path(args.out_root)
@@ -24,11 +25,11 @@ out_root.mkdir(parents=True, exist_ok=True)
 year = args.year
 variable = args.variable
 region = "no_Antarctic"
-lat_min = -10#-60
-lat_max = 10#90
+lat_min = -60
+lat_max = 90
 if variable == "2m_temperature": var = "t2m"
 elif variable == "10m_wind_speed": var = "w10"
-out_file = out_root / f"HRES_fc0_{year}_{region}_{var}_0p25.zarr"
+out_file = out_root / f"HRES_fc0_{year}_{region}_{var}_1p50.zarr"
 
 print("----------------------------------------------")
 print("Download HRES-fc0 verification data from WeatherBench 2.")

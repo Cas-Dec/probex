@@ -13,7 +13,7 @@ ERA5_ZARR = "gs://weatherbench2/datasets/era5/1959-2023_01_10-wb13-6h-1440x721_w
 
 parser = argparse.ArgumentParser(description="Download ERA5 verification data from WB2.")
 parser.add_argument("--zarr-bucket", type=str, default=ERA5_ZARR, help="weatherbench2 Zarr bucket to read from.")
-parser.add_argument("--year", type=int, default=2020, help="Verification year.")
+parser.add_argument("--year", type=int, default=2022, help="Verification year.")
 parser.add_argument("--variable", type=str, default="2m_temperature", choices=["2m_temperature", "10m_wind_speed"],
 help="WeatherBench 2 variable name.")
 parser.add_argument("--out-root", type=str, default="data/ERA5", help="Output directory.")
@@ -24,11 +24,11 @@ out_root.mkdir(parents=True, exist_ok=True)
 year = args.year
 variable = args.variable
 region = "no_Antarctic"
-lat_min = -10 #-60
-lat_max = 10 # 90
+lat_min = -60
+lat_max = 90
 if variable == "2m_temperature": var = "t2m"
 elif variable == "10m_wind_speed": var = "w10"
-out_file = out_root / f"ERA5_{year}_{region}_{var}_0p25.zarr"
+out_file = out_root / f"{year}_{region}_{var}_0p25.zarr"
 
 print("----------------------------------------------")
 print("Download ERA5 verification data from WeatherBench 2.")

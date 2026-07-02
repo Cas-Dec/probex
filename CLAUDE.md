@@ -4,7 +4,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project overview
 
-`probex` evaluates probabilistic ensemble weather forecasts (GenCast, IFS ENS) against verification data (ERA5, HRES-fc0) with a focus on record-breaking extremes. Variables are 2m temperature (`t2m`) and 10m wind speed (`w10`). All scripts must be run from the project root.
+`probex` evaluates probabilistic ensemble weather forecasts (IFS_ENS, FGN, ArchesWeatherGen, uCast) against verification data (ERA5, HRES-fc0) with a focus on record-breaking extremes. Variables are 2m temperature (`t2m`) and 10m wind speed (`w10`). All scripts must be run from the project root.
+
+**IMPORTANT: All data is at 1.5° resolution (240x121 equiangular grid).** This includes:
+- Forecast models (IFS_ENS, FGN, ArchesWeatherGen, uCast)
+- Truth data (ERA5, HRES_fc0)
+- ERA5 records
+
+GenCast has been removed from evaluation.
 
 ## Environment
 
@@ -38,17 +45,18 @@ dos2unix job_scripts/*.pbs
 **On HPC (PBS scheduler) — full runs:**
 
 ```bash
-# Download WeatherBench 2 data
-qsub job_scripts/submit_download_era5_wb2.pbs
-qsub job_scripts/submit_download_hres_fc0_wb2.pbs
-qsub job_scripts/submit_download_gencast_wb2.pbs   # array job: 2 vars × 20 leads
-qsub job_scripts/submit_download_ifs_ens_wb2.pbs   # array job: 2 vars × 20 leads
+# Download WeatherBench 2 data (1.5° resolution)
+# Note: ERA5 uses shared store at /data/gent/vo/000/gvo00090/HEAT/Data/wb2/1959-2023_01_10-6h-240x121_equiangular_with_poles_conservative.zarr
+qsub job_scripts/submit_download_hres_fc0_wb2.pbs  # array job: 2 vars
+qsub job_scripts/submit_download_ifs_ens_wb2.pbs   # array job: 2 vars × 5 leads
 
-# Evaluation (array job over 4 tasks: GenCast t2m/w10, IFS_ENS t2m/w10)
-qsub job_scripts/submit_eval_crps.pbs
-qsub job_scripts/submit_eval_point.pbs
-qsub job_scripts/submit_eval_occurrence.pbs
-qsub job_scripts/submit_eval_margin.pbs
+# Evaluation (array job over 8 tasks: 4 models × 2 vars)
+# Models: IFS_ENS, ArchesWeatherGen, uCast, FGN
+# IFS_ENS uses HRES_fc0 as truth, others use ERA5
+qsub job_scripts/submit_eval_crps_all.pbs
+qsub job_scripts/submit_eval_point_all.pbs
+qsub job_scripts/submit_eval_occurrence_all.pbs
+qsub job_scripts/submit_eval_margin_all.pbs
 ```
 
 **Overriding defaults at submission:**
@@ -94,14 +102,21 @@ no_Antarctic = dict(latitude=slice(-10, 10), longitude=slice(-10, 10))  # should
 
 ## Data layout
 
+**All data at 1.5° resolution (240x121 equiangular grid)**
+
 ```
-data/
-  ERA5/          <year>_no_Antarctic_<var>_0p25.zarr
-  HRES_fc0/      HRES_fc0_<year>_no_Antarctic_<var>_0p25.zarr
-  GenCast/       GenCast_<year>_no_Antarctic_<var>_m<N>_0p25_lead_<LLL>h.zarr
-  IFS_ENS/       IFS_ENS_<year>_no_Antarctic_<var>_m<N>_0p25_lead_<LLL>h.zarr
-  era5_records/  ERA5_record_{max,min}_month_<tag>_<var>.nc
-                 ERA5_lsm_sfc.nc
+/data/gent/vo/000/gvo00090/HEAT/Data/
+  wb2/                                    # Shared ERA5 store
+    1959-2023_01_10-6h-240x121_equiangular_with_poles_conservative.zarr
+  forecasts/
+    HRES_fc0/      HRES_fc0_<year>_no_Antarctic_<var>_1p50.zarr
+    IFS_ENS/       IFS_ENS_<year>_no_Antarctic_<var>_m50_1p50_lead_<LLL>h.zarr
+    FGN/           FGN_<year>_no_Antarctic_<var>_m64_1p50_lead_<LLL>h.zarr
+    ucast_forecasts_<year>.zarr          # Combined Zarr (all leads)
+    archesweathergen_forecasts_<year>.zarr  # Combined Zarr (all leads)
+
+data/era5_records/  ERA5_record_{max,min}_month_<tag>_<var>.nc
+                    ERA5_lsm_sfc.nc
 results/
   <model>/
     CRPS/        <model>_<case>_CRPS_<year>_<var>_no_Antarctic_records_<tag>_cond_<truth>.nc
@@ -111,7 +126,7 @@ results/
 logs/            one log per PBS array task
 ```
 
-One Zarr file per year, variable, and lead time. Forecast dimensions: `time, number, prediction_timedelta, latitude, longitude` (with `valid_time = time + prediction_timedelta`). If downloads land in `Data/` (capital D), the bash scripts create a lowercase symlink automatically.
+Forecast dimensions: `time, number, prediction_timedelta, latitude, longitude` (with `valid_time = time + prediction_timedelta`).
 
 ## Architecture
 

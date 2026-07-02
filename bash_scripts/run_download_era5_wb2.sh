@@ -10,13 +10,13 @@ conda activate probex
 
 echo "Running ERA5 download"
 echo "variable    = ${VARIABLE}"
-echo "year        = 2020"
+echo "year        = 2022"
 echo "working dir = $(pwd)"
 date
 hostname
 
 python -u download/download_era5_wb2.py \
-  --year 2020 \
+  --year 2022 \
   --variable "${VARIABLE}" \
   --out-root "data/ERA5"
 

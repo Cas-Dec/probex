@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # name as it appears in qstat
-#PBS -N era52020
+#PBS -N era52022
 #PBS -l walltime=04:00:00
 #PBS -l nodes=1:ppn=2
 #PBS -l mem=16gb
@@ -14,7 +14,7 @@ cd "${PBS_O_WORKDIR}"
 mkdir -p logs
 TASK_ID="${PBS_ARRAYID}"
 
-exec > "logs/era5_2020_${TASK_ID}.log" 2>&1
+exec > "logs/era5_2022_${TASK_ID}.log" 2>&1
 
 echo "Running ERA5 array task"
 echo "task id = ${TASK_ID}"
