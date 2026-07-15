@@ -13,6 +13,7 @@ output is transposed to the framework standard:
 from __future__ import annotations
 
 import argparse
+import os
 from pathlib import Path
 
 import numpy as np
@@ -25,6 +26,25 @@ FGN_ZARR = (
 )
 N_MEMBERS = 64
 
+
+def _load_dotenv(path: Path = Path(".env")) -> None:
+    try:
+        with path.open() as fh:
+            for line in fh:
+                line = line.strip()
+                if line and not line.startswith("#") and "=" in line:
+                    key, value = line.split("=", 1)
+                    os.environ.setdefault(key.strip(), value.strip())
+    except FileNotFoundError:
+        pass
+
+
+_load_dotenv()
+default_out_root = os.environ.get(
+    "FGN_OUT_ROOT",
+    os.environ.get("FORECAST_ROOT", "data/forecasts") + "/FGN",
+)
+
 parser = argparse.ArgumentParser(description="Download a single-lead FGN chunk from WB2.")
 parser.add_argument("--zarr-bucket", type=str, default=FGN_ZARR,
                     help="WeatherBench 2 Zarr bucket.")
@@ -35,7 +55,7 @@ parser.add_argument("--variable", type=str, default="2m_temperature",
                     help="WeatherBench 2 variable name.")
 parser.add_argument("--lead-hour", type=int, default=24,
                     help="Lead time in hours (multiple of 6, range 6-360).")
-parser.add_argument("--out-root", type=str, default="data/FGN",
+parser.add_argument("--out-root", type=str, default=default_out_root,
                     help="Output directory.")
 args = parser.parse_args()
 

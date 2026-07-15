@@ -1,13 +1,15 @@
 #!/usr/bin/env bash
 # name as it appears in qstat
-#PBS -N gencast2020 
+#PBS -N gencast2020
 #PBS -l walltime=08:00:00
 #PBS -l nodes=1:ppn=2
 #PBS -l mem=32gb
+#PBS -o job_scripts/logs/%j.log
 #PBS -j oe
-#PBS -t 1-40%4 
+#PBS -t 1-40%4
 # array job with in total 40 tasks (2 variables, 20 leadtimes), at most 4 at the same time ...
-set -euo pipefail # Stop if:a command fails , an undefined variable is used , or one command in a pipe fails
+
+set -euo pipefail
 
 # Go to the directory from which the job was submitted.
 # Submit from the project root.

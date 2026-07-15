@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import gc
+import os
 from datetime import datetime
 from pathlib import Path
 
@@ -56,8 +57,36 @@ parser.add_argument("--margin-max", type=float, default=6.0)
 parser.add_argument("--margin-step", type=float, default=0.25)
 args = parser.parse_args()
 
+
+def _load_dotenv(path: Path) -> None:
+    try:
+        with path.open() as fh:
+            for line in fh:
+                line = line.strip()
+                if line and not line.startswith("#") and "=" in line:
+                    key, value = line.split("=", 1)
+                    os.environ.setdefault(key.strip(), value.strip())
+    except FileNotFoundError:
+        pass
+
 root = Path.cwd()
-data_dir = root / "data"
+_load_dotenv(root / ".env")
+
+heat_data_root = Path(os.environ.get("HEAT_DATA", "data"))
+
+forecast_root = Path(
+    os.environ.get("FORECAST_ROOT", str(heat_data_root / "forecasts"))
+)
+era5_root = Path(
+    os.environ.get("ERA5_ROOT", str(heat_data_root / "wb2"))
+)
+era5_truth_file = Path(
+    os.environ.get(
+        "ERA5_TRUTH_ZARR",
+        str(era5_root / "1959-2023_01_10-6h-240x121_equiangular_with_poles_conservative.zarr"),
+    )
+)
+records_root = Path(os.environ.get("RECORDS_ROOT", str(root / "data" / "era5_records")))
 
 year = args.year
 var = args.var
@@ -94,12 +123,15 @@ if var == "t2m":
 out_dir = root / "results" / model / "Margin"
 out_dir.mkdir(parents=True, exist_ok=True)
 
-truth_file = data_dir / f"{truth_name}" / f"{truth_name}_{year}_no_Antarctic_{var}_0p25.zarr"
+if truth_name == "ERA5":
+    truth_file = era5_truth_file
+else:
+    truth_file = forecast_root / "HRES_fc0" / f"HRES_fc0_{year}_no_Antarctic_{var}_1p50.zarr"
 
-record_max_file = data_dir / "era5_records" / f"ERA5_record_max_month_{record_tag}_{var}.nc"
-record_min_file = data_dir / "era5_records" / f"ERA5_record_min_month_{record_tag}_{var}.nc"
+record_max_file = records_root / f"ERA5_record_max_month_{record_tag}_{var}.nc"
+record_min_file = records_root / f"ERA5_record_min_month_{record_tag}_{var}.nc"
 
-lsm_file = data_dir / "era5_records" / "ERA5_lsm_sfc.nc"
+lsm_file = records_root / "ERA5_lsm_sfc.nc"
 
 print("--------------------------")
 print("Margin evaluation")
@@ -159,7 +191,7 @@ outputs_by_case = {case: [] for case in cases}
 for i, lead_hour in enumerate(leads, start=1):
 
     forecast_file = (
-        data_dir / model
+        forecast_root / model
         / f"{model}_{year}_no_Antarctic_{var}_m{n_members}_{resolution_tag}_lead_{lead_hour:03d}h.zarr"
     )
 

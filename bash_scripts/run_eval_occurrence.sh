@@ -10,17 +10,18 @@ RECORD_TAG="${5:-1979_2018}"
 PROJECT_ROOT="${PBS_O_WORKDIR:-$(pwd)}"
 cd "${PROJECT_ROOT}"
 
-source "$(conda info --base)/etc/profile.d/conda.sh"
-conda activate probex
+if [[ -f .env ]]; then
+  set -a
+  source .env
+  set +a
+fi
+
+# Verify probex environment exists
+source "${PROJECT_ROOT}/find_probex_env.sh"
 
 mkdir -p logs "results/${MODEL}/Occurrence"
 
-# The eval scripts use ./data. If your downloads are in ./Data, make a lowercase link.
-if [[ ! -d data && -d Data ]]; then
-  ln -s Data data
-fi
-
-echo "Running occurrence evaluation"
+echo "Running Occurrence evaluation"
 echo "model      = ${MODEL}"
 echo "variable   = ${VAR}"
 echo "year       = ${YEAR}"
@@ -30,7 +31,7 @@ echo "workdir    = $(pwd)"
 date
 hostname
 
-python -u eval/forecast_evaluation_occurrence.py \
+"${PROBEX_PYTHON}" -u eval/forecast_evaluation_occurrence.py \
   --year "${YEAR}" \
   --var "${VAR}" \
   --model "${MODEL}" \

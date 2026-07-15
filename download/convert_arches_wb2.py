@@ -2,8 +2,8 @@
 Convert the ArchesWeatherGen ensemble Zarr to per-lead, per-variable Zarr files
 compatible with the probex evaluation framework.
 
-Run from the project root with the geoarches conda environment:
-    conda run -n geoarches python download/convert_arches_wb2.py
+Run from the project root:
+    python download/convert_arches_wb2.py
 
 Writes to data/ArchesWeatherGen/:
     ArchesWeatherGen_{year}_no_Antarctic_t2m_m{N}_1p50_lead_{LLL}h.zarr
@@ -46,9 +46,11 @@ def _load_dotenv(path: str = ".env") -> None:
 
 _load_dotenv()
 
+forecast_root = os.environ.get("FORECAST_ROOT", "data/forecasts")
+
 DEFAULT_IN_ZARR = os.environ.get(
     "ARCHESWEATHERGEN_FORECASTS_2022",
-    "/data/gent/vo/000/gvo00090/HEAT/Data/forecasts/archesweathergen_forecasts_2022.zarr",
+    str(Path(forecast_root) / "archesweathergen_forecasts_2022.zarr"),
 )
 
 parser = argparse.ArgumentParser()

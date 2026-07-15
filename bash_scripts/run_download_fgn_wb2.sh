@@ -50,11 +50,11 @@ if [[ -f .env ]]; then
 fi
 
 if [[ -z "${OUT_ROOT}" ]]; then
-  OUT_ROOT="${HEAT_DATA:-data}/forecasts/FGN"
+  OUT_ROOT="${FGN_OUT_ROOT:-${FORECAST_ROOT:-${HEAT_DATA:-data}/forecasts}/FGN}"
 fi
 
-source "$(conda info --base)/etc/profile.d/conda.sh"
-conda activate probex
+# Verify probex environment exists
+source "${PROJECT_ROOT}/find_probex_env.sh"
 
 echo "Running FGN download"
 echo "variable    = ${VARIABLE}"
@@ -64,7 +64,7 @@ echo "working dir = $(pwd)"
 date
 hostname
 
-python -u download/download_fgn_wb2.py \
+"${PROBEX_PYTHON}" -u download/download_fgn_wb2.py \
   --year 2022 \
   --variable "${VARIABLE}" \
   --lead-hour "${LEAD_HOUR}" \

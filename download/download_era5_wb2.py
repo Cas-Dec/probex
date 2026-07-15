@@ -6,17 +6,37 @@ Download an ERA5 verification chunk from WeatherBench 2.
 
 from __future__ import annotations
 import argparse
+import os
 from pathlib import Path
 import xarray as xr
 
 ERA5_ZARR = "gs://weatherbench2/datasets/era5/1959-2023_01_10-wb13-6h-1440x721_with_derived_variables.zarr"
+
+
+def _load_dotenv(path: Path = Path(".env")) -> None:
+    try:
+        with path.open() as fh:
+            for line in fh:
+                line = line.strip()
+                if line and not line.startswith("#") and "=" in line:
+                    key, value = line.split("=", 1)
+                    os.environ.setdefault(key.strip(), value.strip())
+    except FileNotFoundError:
+        pass
+
+
+_load_dotenv()
+default_out_root = os.environ.get(
+    "ERA5_DOWNLOAD_OUT_ROOT",
+    os.environ.get("FORECAST_ROOT", "data/forecasts") + "/ERA5",
+)
 
 parser = argparse.ArgumentParser(description="Download ERA5 verification data from WB2.")
 parser.add_argument("--zarr-bucket", type=str, default=ERA5_ZARR, help="weatherbench2 Zarr bucket to read from.")
 parser.add_argument("--year", type=int, default=2022, help="Verification year.")
 parser.add_argument("--variable", type=str, default="2m_temperature", choices=["2m_temperature", "10m_wind_speed"],
 help="WeatherBench 2 variable name.")
-parser.add_argument("--out-root", type=str, default="data/ERA5", help="Output directory.")
+parser.add_argument("--out-root", type=str, default=default_out_root, help="Output directory.")
 args = parser.parse_args()
 
 out_root = Path(args.out_root)

@@ -1,5 +1,6 @@
 data/
 results/
 logs/
+job_scripts/logs/
 __pycache__/
 *.pyc
