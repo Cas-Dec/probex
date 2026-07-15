@@ -3,7 +3,7 @@
 #PBS -l walltime=01:30:00
 #PBS -l nodes=1:ppn=4
 #PBS -l mem=64gb
-#PBS -o job_scripts/logs/%j.log
+#PBS -o ${PBS_O_WORKDIR}/job_scripts/logs/convert_arches.log
 #PBS -j oe
 
 set -euo pipefail
@@ -24,7 +24,7 @@ if [[ -f .env ]]; then
 fi
 
 # Find probex environment
-source "${PBS_O_WORKDIR}/find_probex_env.sh"
+source ./find_probex_env.sh
 
 # Run conversion
 echo "Converting ArchesWeatherGen 2022..."

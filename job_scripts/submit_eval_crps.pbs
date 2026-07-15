@@ -3,7 +3,7 @@
 #PBS -l walltime=12:00:00
 #PBS -l nodes=1:ppn=4
 #PBS -l mem=64gb
-#PBS -o job_scripts/logs/%j.log
+#PBS -o ${PBS_O_WORKDIR}/job_scripts/logs/submit_eval_crps.log
 #PBS -j oe
 #PBS -t 1-4%1
 
