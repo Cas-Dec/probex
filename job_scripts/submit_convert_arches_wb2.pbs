@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+#PBS -N convert_arches
+#PBS -l walltime=01:30:00
+#PBS -l nodes=1:ppn=4
+#PBS -l mem=64gb
+#PBS -o job_scripts/logs/%j.log
+#PBS -j oe
+
+set -euo pipefail
+
+# Navigate to project root
+cd "${PBS_O_WORKDIR}"
+
+echo "Converting ArchesWeatherGen forecasts to per-lead Zarr files"
+echo "Starting at: $(date)"
+echo "Host: $(hostname)"
+echo ""
+
+# Load environment
+if [[ -f .env ]]; then
+  set -a
+  source .env
+  set +a
+fi
+
+# Find probex environment
+source "${PBS_O_WORKDIR}/find_probex_env.sh"
+
+# Run conversion
+echo "Converting ArchesWeatherGen 2022..."
+"${PROBEX_PYTHON}" -u download/convert_arches_wb2.py --year 2022 --out-root data
+
+echo ""
+echo "Conversion complete at: $(date)"
+ls -lh data/ArchesWeatherGen/ArchesWeatherGen_2022_*.zarr 2>/dev/null | wc -l && echo "ArchesWeatherGen per-lead files created"

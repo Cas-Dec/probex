@@ -133,7 +133,7 @@ print(f"out_dir : {out_dir}")
 
 print("\nLoading truth...")
 truth_da = xr.open_zarr(truth_file, chunks={})[variable]
-
+truth_da = truth_da.assign_coords(longitude=(((truth_da.longitude + 180) % 360) - 180)).sortby("longitude")
 truth_da = truth_da.sel(time=slice(eval_start, eval_end))
 truth_da = truth_da.sel(no_Antarctic)
 
