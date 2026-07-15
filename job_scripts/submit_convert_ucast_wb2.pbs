@@ -3,13 +3,17 @@
 #PBS -l walltime=02:00:00
 #PBS -l nodes=1:ppn=4
 #PBS -l mem=64gb
-#PBS -o ${PBS_O_WORKDIR}/job_scripts/logs/convert_ucast.log
+#PBS -o job_scripts/logs/convert_ucast.log
 #PBS -j oe
 
 set -euo pipefail
 
 # Navigate to project root
-cd "${PBS_O_WORKDIR}"
+PROJECT_ROOT="${PBS_O_WORKDIR:-$(pwd)}"
+if [[ ! -f "${PROJECT_ROOT}/find_probex_env.sh" && -f "${PROJECT_ROOT}/../find_probex_env.sh" ]]; then
+  PROJECT_ROOT="$(cd "${PROJECT_ROOT}/.." && pwd)"
+fi
+cd "${PROJECT_ROOT}"
 
 echo "Converting uCast forecasts to per-lead Zarr files"
 echo "Starting at: $(date)"

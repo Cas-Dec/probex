@@ -3,12 +3,16 @@
 #PBS -l walltime=04:00:00
 #PBS -l nodes=1:ppn=4
 #PBS -l mem=64gb
-#PBS -o ${PBS_O_WORKDIR}/job_scripts/logs/submit_create_era5_records.log
+#PBS -o job_scripts/logs/submit_create_era5_records.log
 #PBS -j oe
 
 set -euo pipefail
 
-cd "${PBS_O_WORKDIR}"
+PROJECT_ROOT="${PBS_O_WORKDIR:-$(pwd)}"
+if [[ ! -f "${PROJECT_ROOT}/find_probex_env.sh" && -f "${PROJECT_ROOT}/../find_probex_env.sh" ]]; then
+  PROJECT_ROOT="$(cd "${PROJECT_ROOT}/.." && pwd)"
+fi
+cd "${PROJECT_ROOT}"
 
 echo "Running ERA5 records creation job"
 date

@@ -4,14 +4,17 @@
 #PBS -l walltime=12:00:00
 #PBS -l nodes=1:ppn=4
 #PBS -l mem=64gb
-#PBS -o ${PBS_O_WORKDIR}/job_scripts/logs/submit_eval_crps_all.log
+#PBS -o job_scripts/logs/submit_eval_crps_all.log
 #PBS -j oe
 #PBS -t 1-8%2
 
 set -euo pipefail
 
-cd "${PBS_O_WORKDIR}"
-mkdir -p logs
+PROJECT_ROOT="${PBS_O_WORKDIR:-$(pwd)}"
+if [[ ! -f "${PROJECT_ROOT}/find_probex_env.sh" && -f "${PROJECT_ROOT}/../find_probex_env.sh" ]]; then
+  PROJECT_ROOT="$(cd "${PROJECT_ROOT}/.." && pwd)"
+fi
+cd "${PROJECT_ROOT}"
 
 TASK_ID="${PBS_ARRAYID}"
 IDX=$((TASK_ID - 1))
@@ -33,7 +36,6 @@ fi
 
 RECORD_TAG="${RECORD_TAG:-1979_2018}"
 
-exec > "logs/eval_crps_${YEAR}_${MODEL}_${VAR}_${TASK_ID}.log" 2>&1
 
 export OMP_NUM_THREADS=1
 export MKL_NUM_THREADS=1
