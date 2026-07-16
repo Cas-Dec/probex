@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import shutil
 import warnings
 from pathlib import Path
 
@@ -238,9 +239,17 @@ for var_short, var_long in VARIABLES.items():
             f"_m{n_members}_1p50_lead_{lead_hour:03d}h.zarr"
         )
 
+        expected_var = "10m_wind_speed" if var_long == "10m_wind_speed" else var_long
         if out_file.exists():
-            print(f"Skip (exists): {out_file.name}")
-            continue
+            try:
+                existing = xr.open_zarr(out_file, chunks={})
+                if expected_var in existing.data_vars:
+                    print(f"Skip (exists): {out_file.name}")
+                    continue
+                print(f"Rewriting incomplete output: {out_file.name}")
+            except Exception:
+                print(f"Rewriting unreadable output: {out_file.name}")
+            shutil.rmtree(out_file, ignore_errors=True)
 
         print(f"Writing {out_file.name} ...")
 
@@ -269,7 +278,10 @@ for var_short, var_long in VARIABLES.items():
         # Drop source encoding metadata (especially chunks) before writing,
         # otherwise xarray may reject dask/zarr chunk alignment.
         da.encoding = {}
-        da.to_dataset(name=da.name).to_zarr(out_file, mode="w")
+        ds_out = da.to_dataset(name=da.name)
+        for name in ds_out.variables:
+            ds_out[name].encoding = {}
+        ds_out.to_zarr(out_file, mode="w", zarr_format=2)
         print(f"  -> {out_file}")
 
 print("\nDone.")

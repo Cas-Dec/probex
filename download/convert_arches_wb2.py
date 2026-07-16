@@ -151,7 +151,10 @@ for var_short, var_long in VARIABLES.items():
         # Drop source encoding metadata (especially chunks) before writing,
         # otherwise xarray may reject dask/zarr chunk alignment.
         da.encoding = {}
-        da.to_dataset(name=da.name).to_zarr(out_file, mode="w")
+        ds_out = da.to_dataset(name=da.name)
+        for name in ds_out.variables:
+            ds_out[name].encoding = {}
+        ds_out.to_zarr(out_file, mode="w", zarr_format=2)
         print(f"  -> {out_file}")
 
 print("\nDone.")
