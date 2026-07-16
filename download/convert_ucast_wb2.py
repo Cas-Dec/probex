@@ -174,6 +174,23 @@ ds = ds.assign_coords(ensemble_member=mem_vals)
 
 # Convert lead_time from timedelta64[ns] to integer hours.
 lead_hours = (ds.lead_time.values.astype("int64") // 3_600_000_000_000).astype("int32")
+
+# Some exports still decode to duplicated/all-zero lead labels. Patch once here
+# so subsequent .sel(prediction_timedelta=[lead]) calls use a unique index.
+if len(np.unique(lead_hours)) != lead_hours.size:
+    if ds.sizes["lead_time"] == len(_KNOWN_LEAD_HOURS):
+        warnings.warn(
+            "uCast lead_time contains duplicate values after decode; "
+            f"overriding with known leads {_KNOWN_LEAD_HOURS} h.",
+            stacklevel=2,
+        )
+        lead_hours = np.array(_KNOWN_LEAD_HOURS, dtype="int32")
+    else:
+        raise ValueError(
+            "uCast lead_time contains duplicate labels and cannot be patched "
+            f"safely (size={ds.sizes['lead_time']})."
+        )
+
 ds = ds.assign_coords(lead_time=lead_hours)
 
 # Rename dimensions to match framework conventions.
@@ -249,7 +266,10 @@ for var_short, var_long in VARIABLES.items():
             "longitude": 120,
         })
 
-        da.to_dataset().to_zarr(out_file, mode="w")
+        # Drop source encoding metadata (especially chunks) before writing,
+        # otherwise xarray may reject dask/zarr chunk alignment.
+        da.encoding = {}
+        da.to_dataset(name=da.name).to_zarr(out_file, mode="w")
         print(f"  -> {out_file}")
 
 print("\nDone.")

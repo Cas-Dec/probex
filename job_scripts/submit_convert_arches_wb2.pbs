@@ -14,6 +14,8 @@ if [[ ! -f "${PROJECT_ROOT}/find_probex_env.sh" && -f "${PROJECT_ROOT}/../find_p
   PROJECT_ROOT="$(cd "${PROJECT_ROOT}/.." && pwd)"
 fi
 cd "${PROJECT_ROOT}"
+mkdir -p "${PROJECT_ROOT}/job_scripts/logs"
+exec > "${PROJECT_ROOT}/job_scripts/logs/convert_arches.log" 2>&1
 
 echo "Converting ArchesWeatherGen forecasts to per-lead Zarr files"
 echo "Starting at: $(date)"

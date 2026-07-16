@@ -148,7 +148,10 @@ for var_short, var_long in VARIABLES.items():
             "longitude": 120,
         })
 
-        da.to_dataset().to_zarr(out_file, mode="w")
+        # Drop source encoding metadata (especially chunks) before writing,
+        # otherwise xarray may reject dask/zarr chunk alignment.
+        da.encoding = {}
+        da.to_dataset(name=da.name).to_zarr(out_file, mode="w")
         print(f"  -> {out_file}")
 
 print("\nDone.")
