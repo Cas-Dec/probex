@@ -33,6 +33,11 @@ RECORD_TAG="${RECORD_TAG:-1979_2018}"
 MARGIN_MAX="${MARGIN_MAX:-6.0}"
 MARGIN_STEP="${MARGIN_STEP:-0.25}"
 
+LOG_DIR="${PROJECT_ROOT}/job_scripts/logs"
+mkdir -p "${LOG_DIR}"
+LOG_FILE="${LOG_DIR}/submit_eval_margin_task${TASK_ID}_${MODEL}_${VAR}_${YEAR}.log"
+exec > >(tee -a "${LOG_FILE}") 2>&1
+
 
 export OMP_NUM_THREADS=1
 export MKL_NUM_THREADS=1
@@ -48,10 +53,13 @@ echo "truth       = ${TRUTH}"
 echo "records     = ${RECORD_TAG}"
 echo "margin max  = ${MARGIN_MAX}"
 echo "margin step = ${MARGIN_STEP}"
+echo "log file    = ${LOG_FILE}"
 date
 hostname
 
+echo "Launching: bash bash_scripts/run_eval_margin.sh ${MODEL} ${VAR} ${YEAR} ${TRUTH} ${RECORD_TAG} ${MARGIN_MAX} ${MARGIN_STEP}"
 bash bash_scripts/run_eval_margin.sh "${MODEL}" "${VAR}" "${YEAR}" "${TRUTH}" "${RECORD_TAG}" "${MARGIN_MAX}" "${MARGIN_STEP}"
+echo "Runner exit status: $?"
 
 echo "Finished margin eval array task"
 date

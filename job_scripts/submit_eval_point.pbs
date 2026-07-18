@@ -31,6 +31,11 @@ YEAR="${YEAR:-2020}"
 TRUTH="${TRUTH:-ERA5}"
 RECORD_TAG="${RECORD_TAG:-1979_2018}"
 
+LOG_DIR="${PROJECT_ROOT}/job_scripts/logs"
+mkdir -p "${LOG_DIR}"
+LOG_FILE="${LOG_DIR}/submit_eval_point_task${TASK_ID}_${MODEL}_${VAR}_${YEAR}.log"
+exec > >(tee -a "${LOG_FILE}") 2>&1
+
 
 export OMP_NUM_THREADS=1
 export MKL_NUM_THREADS=1
@@ -44,10 +49,13 @@ echo "variable   = ${VAR}"
 echo "year       = ${YEAR}"
 echo "truth      = ${TRUTH}"
 echo "records    = ${RECORD_TAG}"
+echo "log file   = ${LOG_FILE}"
 date
 hostname
 
+echo "Launching: bash bash_scripts/run_eval_point.sh ${MODEL} ${VAR} ${YEAR} ${TRUTH} ${RECORD_TAG}"
 bash bash_scripts/run_eval_point.sh "${MODEL}" "${VAR}" "${YEAR}" "${TRUTH}" "${RECORD_TAG}"
+echo "Runner exit status: $?"
 
 echo "Finished point eval array task"
 date
