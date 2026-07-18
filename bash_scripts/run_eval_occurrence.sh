@@ -8,6 +8,9 @@ TRUTH="${4:-ERA5}"
 RECORD_TAG="${5:-1979_2018}"
 
 PROJECT_ROOT="${PBS_O_WORKDIR:-$(pwd)}"
+if [[ ! -f "${PROJECT_ROOT}/find_probex_env.sh" && -f "${PROJECT_ROOT}/../find_probex_env.sh" ]]; then
+  PROJECT_ROOT="$(cd "${PROJECT_ROOT}/.." && pwd)"
+fi
 cd "${PROJECT_ROOT}"
 
 if [[ -f .env ]]; then
@@ -17,7 +20,7 @@ if [[ -f .env ]]; then
 fi
 
 # Verify probex environment exists
-source "${PROJECT_ROOT}/find_probex_env.sh"
+source "./find_probex_env.sh"
 
 mkdir -p logs "results/${MODEL}/Occurrence"
 
