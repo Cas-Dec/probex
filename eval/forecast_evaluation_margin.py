@@ -25,8 +25,7 @@ MODEL_CONFIG = {
         "resolution_tag": "0p25",
     },
     "IFS_ENS": {
-        "leads": [12, 24, 36, 48, 60, 72, 84, 96, 108, 120,
-                  132, 144, 156, 168, 180, 192, 204, 216, 228, 240],
+        "leads": [12, 48, 120, 168, 240],
         "n_members": 50,
         "resolution_tag": "1p50",
     },
@@ -203,6 +202,7 @@ for i, lead_hour in enumerate(leads, start=1):
 
     forecast = xr.open_zarr(forecast_file, chunks={})[variable]
     forecast = forecast.sel(no_Antarctic)
+    forecast = functions.normalize_spatial_coords(forecast)
 
     lead_delta = np.timedelta64(lead_hour, "h")
 
@@ -219,8 +219,9 @@ for i, lead_hour in enumerate(leads, start=1):
         continue
 
     truth_sub = truth_da.sel(time=forecast["time"])
+    truth_sub = functions.normalize_spatial_coords(truth_sub)
 
-    truth_sub = truth_sub.sel(
+    truth_sub = truth_sub.reindex(
         latitude=forecast["latitude"],
         longitude=forecast["longitude"],
         method="nearest",
@@ -249,11 +250,12 @@ for i, lead_hour in enumerate(leads, start=1):
         }
     )
 
-    lsm_sub = lsm.sel(
+    lsm_sub = lsm.reindex(
         latitude=forecast["latitude"],
         longitude=forecast["longitude"],
         method="nearest",
     )
+    lsm_sub = functions.normalize_spatial_coords(lsm_sub)
 
     weights = functions.latitude_weights(forecast)
 
@@ -274,7 +276,7 @@ for i, lead_hour in enumerate(leads, start=1):
             forecast["time"].values,
         )
 
-        record_sub = record_sub.sel(
+        record_sub = record_sub.reindex(
             latitude=forecast["latitude"],
             longitude=forecast["longitude"],
             method="nearest",

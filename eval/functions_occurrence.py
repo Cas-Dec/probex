@@ -105,7 +105,7 @@ def weighted_occurrence_stats(
     p = p.astype("float32")
     y = y.astype("float32")
 
-    land_sea_mask = land_sea_mask.sel(
+    land_sea_mask = land_sea_mask.reindex(
         latitude=p["latitude"],
         longitude=p["longitude"],
         method="nearest",
@@ -157,7 +157,7 @@ def reliability_stats(
     p = p.astype("float32")
     y = y.astype("float32")
 
-    land_sea_mask = land_sea_mask.sel(
+    land_sea_mask = land_sea_mask.reindex(
         latitude=p["latitude"],
         longitude=p["longitude"],
         method="nearest",
@@ -225,7 +225,7 @@ def precision_recall_stats(
     p = p.astype("float32")
     y = y.astype(bool)
 
-    land_sea_mask = land_sea_mask.sel(
+    land_sea_mask = land_sea_mask.reindex(
         latitude=p["latitude"],
         longitude=p["longitude"],
         method="nearest",
@@ -383,6 +383,7 @@ def evaluate_occurrence_one_lead(
 
     # Select single lead.
     fc = forecast.isel(prediction_timedelta=0, drop=True)
+    fc = functions.normalize_spatial_coords(fc)
 
     # Convert initialization time to valid time.
     valid_time = fc["time"].values.astype("datetime64[ns]") + lead_delta
@@ -397,14 +398,16 @@ def evaluate_occurrence_one_lead(
     # Select truth and monthly records at these valid times.
     truth_sub = truth.sel(time=fc["time"])
     record_sub = record_by_time(record, fc["time"].values)
+    truth_sub = functions.normalize_spatial_coords(truth_sub)
+    record_sub = functions.normalize_spatial_coords(record_sub)
 
-    truth_sub = truth_sub.sel(
+    truth_sub = truth_sub.reindex(
         latitude=fc["latitude"],
         longitude=fc["longitude"],
         method="nearest",
     )
 
-    record_sub = record_sub.sel(
+    record_sub = record_sub.reindex(
         latitude=fc["latitude"],
         longitude=fc["longitude"],
         method="nearest",

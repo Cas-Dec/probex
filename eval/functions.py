@@ -22,6 +22,46 @@ SEASON_MONTHS = [
 
 LANDSEA_NAMES = ["all", "land", "sea"]
 
+
+def _dedupe_dim(obj: xr.DataArray | xr.Dataset, dim: str):
+    """
+    Ensure a dimension has unique coordinate labels.
+
+    If duplicates exist, keep the first occurrence for each coordinate value.
+    """
+
+    if dim not in obj.dims:
+        return obj
+
+    coord = np.asarray(obj[dim].values)
+
+    if coord.ndim != 1:
+        return obj
+
+    _, first_idx = np.unique(coord, return_index=True)
+
+    if len(first_idx) != coord.size:
+        first_idx = np.sort(first_idx)
+        obj = obj.isel({dim: first_idx})
+
+    return obj
+
+
+def normalize_spatial_coords(obj: xr.DataArray | xr.Dataset):
+    """
+    Normalize latitude/longitude dimensions for robust alignment.
+
+    - deduplicate latitude/longitude coordinate labels
+    - sort latitude and longitude in ascending order
+    """
+
+    for dim in ["latitude", "longitude"]:
+        obj = _dedupe_dim(obj, dim)
+        if dim in obj.dims:
+            obj = obj.sortby(dim)
+
+    return obj
+
 def transform_ERA5_time(data: xr.DataArray) -> xr.DataArray:
     """
     Transform 
@@ -134,7 +174,7 @@ def weighted_rmse_bias(
     error = (point_forecast - truth).astype("float32")
     event_mask = event_mask.astype(bool)
 
-    land_sea_mask = land_sea_mask.sel(
+    land_sea_mask = land_sea_mask.reindex(
         latitude=error["latitude"],
         longitude=error["longitude"],
         method="nearest",
@@ -212,6 +252,7 @@ def evaluate_point_one_lead(
 
     # Select the single lead.
     fc = forecast.isel(prediction_timedelta=0, drop=True)
+    fc = normalize_spatial_coords(fc)
 
     # Convert initialization time to valid time.
     valid_time = fc["time"].values.astype("datetime64[ns]") + lead_delta
@@ -225,8 +266,9 @@ def evaluate_point_one_lead(
 
     # Select matching truth.
     truth_sub = select_transformed_by_time(truth, fc["time"].values)
+    truth_sub = normalize_spatial_coords(truth_sub)
 
-    truth_sub = truth_sub.sel(
+    truth_sub = truth_sub.reindex(
         latitude=fc["latitude"],
         longitude=fc["longitude"],
         method="nearest",
@@ -237,8 +279,9 @@ def evaluate_point_one_lead(
 
     for case, mask in masks.items():
         tmp = select_transformed_by_time(mask, fc["time"].values)
+        tmp = normalize_spatial_coords(tmp)
 
-        tmp = tmp.sel(
+        tmp = tmp.reindex(
             latitude=fc["latitude"],
             longitude=fc["longitude"],
             method="nearest",
@@ -274,10 +317,6 @@ def evaluate_point_one_lead(
     outputs = {case: empty_point_result(lead_hour) for case in masks}
 
     for case, event_mask in mask_sub.items():
-
-        tasks = []
-        keys = []
-
         for season_name, months in zip(SEASON_NAMES, SEASON_MONTHS):
 
             mean_season = select_months(mean_fc, months)
@@ -303,42 +342,30 @@ def evaluate_point_one_lead(
                     landsea,
                 )
 
-                tasks.extend(
-                    [
-                        n,
-                        rmse_mean,
-                        bias_mean,
-                        rmse_median,
-                        bias_median,
-                    ]
+                n_val, rmse_mean_val, bias_mean_val, rmse_median_val, bias_median_val = dask.compute(
+                    n,
+                    rmse_mean,
+                    bias_mean,
+                    rmse_median,
+                    bias_median,
                 )
 
-                keys.append((case, season_name, landsea))
+                n_val = scalar(n_val)
+                rmse_mean_val = scalar(rmse_mean_val)
+                bias_mean_val = scalar(bias_mean_val)
+                rmse_median_val = scalar(rmse_median_val)
+                bias_median_val = scalar(bias_median_val)
 
-        computed = dask.compute(*tasks)
+                loc = dict(
+                    leadtime=lead_hour,
+                    season=season_name,
+                    landsea=landsea,
+                )
 
-        pos = 0
-
-        for case_name, season_name, landsea in keys:
-
-            n_val = scalar(computed[pos])
-            rmse_mean_val = scalar(computed[pos + 1])
-            bias_mean_val = scalar(computed[pos + 2])
-            rmse_median_val = scalar(computed[pos + 3])
-            bias_median_val = scalar(computed[pos + 4])
-
-            pos += 5
-
-            loc = dict(
-                leadtime=lead_hour,
-                season=season_name,
-                landsea=landsea,
-            )
-
-            outputs[case_name]["n"].loc[loc] = n_val
-            outputs[case_name]["rmse_mean"].loc[loc] = rmse_mean_val
-            outputs[case_name]["bias_mean"].loc[loc] = bias_mean_val
-            outputs[case_name]["rmse_median"].loc[loc] = rmse_median_val
-            outputs[case_name]["bias_median"].loc[loc] = bias_median_val
+                outputs[case]["n"].loc[loc] = n_val
+                outputs[case]["rmse_mean"].loc[loc] = rmse_mean_val
+                outputs[case]["bias_mean"].loc[loc] = bias_mean_val
+                outputs[case]["rmse_median"].loc[loc] = rmse_median_val
+                outputs[case]["bias_median"].loc[loc] = bias_median_val
 
     return outputs

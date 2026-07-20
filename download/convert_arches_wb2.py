@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import shutil
 from pathlib import Path
 
 import numpy as np
@@ -121,9 +122,17 @@ for var_short, var_long in VARIABLES.items():
             f"_m{n_members}_1p50_lead_{lead_hour:03d}h.zarr"
         )
 
+        expected_var = "10m_wind_speed" if var_long == "10m_wind_speed" else var_long
         if out_file.exists():
-            print(f"Skip (exists): {out_file.name}")
-            continue
+            try:
+                existing = xr.open_zarr(out_file, chunks={})
+                if expected_var in existing.data_vars:
+                    print(f"Skip (exists): {out_file.name}")
+                    continue
+                print(f"Rewriting incomplete output: {out_file.name}")
+            except Exception:
+                print(f"Rewriting unreadable output: {out_file.name}")
+            shutil.rmtree(out_file, ignore_errors=True)
 
         print(f"Writing {out_file.name} ...")
 

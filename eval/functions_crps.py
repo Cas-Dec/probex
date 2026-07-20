@@ -127,7 +127,7 @@ def weighted_stats(
     field = field.astype("float32")
     event_mask = event_mask.astype(bool)
 
-    land_sea_mask = land_sea_mask.sel(
+    land_sea_mask = land_sea_mask.reindex(
         latitude=field["latitude"],
         longitude=field["longitude"],
         method="nearest",
@@ -225,6 +225,7 @@ def ENS_CRPS_landseasep(
 
     # Select the single lead.
     forecast_sub = forecast.isel(prediction_timedelta=0, drop=True)
+    forecast_sub = functions.normalize_spatial_coords(forecast_sub)
 
     # Convert initialization time to valid time.
     valid_time = forecast_sub["time"].values.astype("datetime64[ns]") + lead_delta
@@ -240,20 +241,22 @@ def ENS_CRPS_landseasep(
         truth,
         forecast_sub["time"].values,
     )
+    truth_sub = functions.normalize_spatial_coords(truth_sub)
 
     mask_sub = functions.select_transformed_by_time(
         event_mask,
         forecast_sub["time"].values,
     )
+    mask_sub = functions.normalize_spatial_coords(mask_sub)
 
     # Spatial alignment.
-    truth_sub = truth_sub.sel(
+    truth_sub = truth_sub.reindex(
         latitude=forecast_sub["latitude"],
         longitude=forecast_sub["longitude"],
         method="nearest",
     )
 
-    mask_sub = mask_sub.sel(
+    mask_sub = mask_sub.reindex(
         latitude=forecast_sub["latitude"],
         longitude=forecast_sub["longitude"],
         method="nearest",
