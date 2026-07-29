@@ -1,5 +1,6 @@
 data/
 results/
+figures/
 logs/
 job_scripts/logs/
 __pycache__/
