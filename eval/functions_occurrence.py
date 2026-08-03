@@ -223,7 +223,6 @@ def precision_recall_stats(
     p, y = xr.align(p, y, join="inner")
 
     p = p.astype("float32")
-    y = y.astype(bool)
 
     land_sea_mask = land_sea_mask.reindex(
         latitude=p["latitude"],
@@ -232,6 +231,7 @@ def precision_recall_stats(
     )
 
     valid = p.notnull() & y.notnull()
+    y = y.astype(bool)
 
     if landsea == "land":
         valid = valid & (land_sea_mask > 0.5)
