@@ -6,3 +6,11 @@ job_scripts/logs/
 __pycache__/
 *.pyc
 notebooks/
+manuscript/README.md
+docs/
+*.aux
+*.bbl
+*.blg
+*.fdb_latexmk
+*.fls
+*.log
