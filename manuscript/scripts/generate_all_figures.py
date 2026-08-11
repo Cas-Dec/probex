@@ -80,7 +80,7 @@ def generate_all(
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--results-root", default="results")
-    parser.add_argument("--output-dir", default="manuscript/fig/new")
+    parser.add_argument("--output-dir", default="manuscript/fig")
     parser.add_argument("--year", type=int, default=2022)
     parser.add_argument("--record-tag", default="1979_2018")
     args = parser.parse_args()
