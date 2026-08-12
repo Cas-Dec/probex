@@ -25,31 +25,32 @@
 
 \begin{abstract}
 
-AI-based ensemble weather prediction systems now rival traditional numerical weather prediction on many medium-range benchmarks, but their reliability for unprecedented extremes remains unclear. We extend the deterministic record-extreme framework of \citet{zhang2026recordextremes} to probabilistic ensemble forecasts of record-breaking heat, cold, and wind. Using 2022 forecasts at 1.5$^{\circ}$ resolution, with monthly local records defined from ERA5 over 1979--2018, we evaluate the physics-based ensemble IFS-ENS and three AI ensembles, FGN, U-Cast, and ArchesWeatherGen. The analysis combines point-summary errors, record-occurrence probabilities, Brier scores, reliability summaries, precision-recall diagnostics, continuous ranked probability scores, and margin-conditioned tail diagnostics, including out-of-ensemble rates and ensemble coverage. Record-breaking events emerge as a distinct verification regime from average weather, and forecast performance depends strongly on event type, lead time, season, and land-sea class. Some AI ensembles represent heat-record occurrence and intensity competitively, but cold records and especially wind records remain more fragile, particularly for large record margins. These results show that probabilistic AI weather forecasts should be assessed not only by whether they predict record exceedance, but also by whether their predictive distributions credibly reach the observed record intensity.
+AI-based weather forecasting now rival traditional numerical weather prediction in terms of average skill. Yet their reliability for record-breaking extremes remains unclear. Here, we extend the deterministic record-extreme benchmark of \citet{zhang2026recordextremes} to probabilistic ensemble forecasts of record-breaking heat, cold, and wind. In particular, we evaluate 2022 probabilistic forecasts of local record-breaking heat, cold and wind from IFS-ENS and three AI ensembles, FGN, U-Cast and ArchesWeatherGen, relative to monthly grid-cell-specific ERA5 records from 1979--2018. Using record-occurrence, distributional and margin-conditioned diagnostics, including Brier scores, reliability, precision-recall performance, record-conditioned continuous ranked probability scores (CRPS), ensemble coverage and out-of-ensemble rates, we find that record extremes are substantially harder to forecast than average weather. AI ensembles generally provide more skilful record-occurrence probabilities, particularly for heat, but this advantage does not consistently extend to the intensity of realised extremes: IFS-ENS remains competitive for cold and wind records, especially at longer lead times. As record margins increase, ensembles can retain probability of threshold exceedance while losing coverage of the realised intensity. Credible probabilistic forecasts of record extremes therefore require both calibrated occurrence probabilities and adequate tail support.
+
 \end{abstract}
 
 \section{Introduction}
 
-Reliable forecasts of record-breaking extremes are essential for early warning, public health, energy systems, agriculture, transport and disaster response. Their importance has been underscored by the ongoing 2026 heat extremes: Copernicus reported that western Europe experienced its hottest June on record during an intense regional heatwave, while the month ranked as the second warmest globally. At the same time, WMO documented concurrent heat impacts, wildfire risk and record temperatures across multiple countries \citep{c3s2026juneheat,wmo2026europeheat}. Against this backdrop, a central forecasting question is whether modern forecast systems remain credible when the atmosphere produces conditions beyond the local seasonal range represented in historical data.
+Reliable forecasts of record-breaking extremes are essential for early warning, public health, energy systems, agriculture, transport and disaster response. Their importance has been underscored by the ongoing 2026 heat extremes: Copernicus reported that western Europe experienced its hottest June on record during an intense regional heatwave, while the month ranked as the second warmest globally. At the same time, WMO documented concurrent heat impacts, wildfire risk and record temperatures across multiple countries \citep{c3s2026juneheat,wmo2026europeheat}. A central forecasting question is therefore whether modern forecast systems remain credible when the atmosphere produces conditions beyond the local seasonal range represented in historical data.
 
-Recent AI weather prediction systems have transformed traditional forecasting systems. Deterministic models such as GraphCast, Pangu-Weather, and FuXi achieved strong global skill at a fraction of the computational cost of traditional numerical weather prediction in many benchmark settings \citep{rasp2024weatherbench2,lam2023graphcast, bi2023pangu, chen2023fuxi}. Yet strong average skill does not imply strong tail skill. A model can reduce global error by forecasting ordinary weather well while still failing in the rare, high-impact situations for which warning performance matters most.
+Recent AI weather prediction systems have achieved strong global skill at substantially lower computational cost than traditional numerical weather prediction in several benchmark settings, including GraphCast, Pangu-Weather and FuXi \citep{rasp2024weatherbench2,lam2023graphcast,bi2023pangu,chen2023fuxi}. However, strong average skill does not guarantee skill for the tails of the distribution. A model can reduce global error by forecasting common conditions accurately while remaining unreliable for rare, high-impact extremes, where forecast performance is most consequential for early warning.
 
-Very recently, that failure mode was made explicit by \citet{zhang2026recordextremes}. They defined record-breaking heat, cold, and wind events locally relative to each grid cell and calendar month, then asked whether deterministic forecasts could predict values beyond the previous historical record. Their conclusion was clear: the physics-based ECMWF deterministic forecast HRES outperformed GraphCast, Pangu-Weather, and FuXi for record-breaking events across heat, cold, and wind. The AI forecasts tended to underpredict hot records, overpredict cold records, and underpredict wind records, with the errors worsening as the observed margin beyond the previous record increased. This pattern suggests a ``soft cap'' in which models trained on historical reanalysis remain excellent interpolators but struggle to extrapolate beyond the training range.
+Very recently, \citet{zhang2026recordextremes} made this limitation explicit. They defined local record-breaking heat, cold and wind relative to each grid cell and calendar month, and assessed whether deterministic forecasts could exceed the corresponding historical record. ECMWF's physics-based deterministic forecast, HRES, outperformed GraphCast, Pangu-Weather and FuXi across all three event types. The AI forecasts underestimated hot and wind records and overestimated cold records, with biases increasing as the observed margin beyond the historical record grew. This behaviour is consistent with a ``soft cap'', whereby models trained on historical reanalysis interpolate accurately within the training distribution but struggle to extrapolate to unprecedented conditions.
 
-A next question to be addressed by the research community is therefore probabilistic. Weather is chaotic, and high-impact decisions require probabilistic rather than point forecasts. Probabilistic AI systems such as GenCast, FGN, U-Cast, ArchesWeatherGen, FuXi-ENS, and AIFS-CRPS produce ensembles or predictive distributions and are often trained with objectives related to proper scoring rules \citep{price2025gencast, alet2026operational, ruhlingcachay2026ucast, couairon2026arches, zhong2025fuxiens, lang2026aifscrps}. In principle, such systems may place probability mass beyond the historical record even when their ensemble mean remains conservative. In practice, they may still be underdispersive, miscalibrated in the tails, or unable to place support near the observed intensity of unprecedented events. That distinction matters scientifically and operationally: assigning nonzero probability to record exceedance is not the same as providing a calibrated forecast distribution for the resulting event severity.
+The corresponding question for probabilistic forecasting remains open. Because weather is inherently chaotic and high-impact decisions require uncertainty quantification, forecast quality cannot be assessed from point forecasts alone. Probabilistic AI systems, including GenCast, FGN, U-Cast, ArchesWeatherGen, FuXi-ENS and AIFS-CRPS, produce ensembles or predictive distributions and are commonly trained using objectives related to proper scoring rules \citep{price2025gencast,alet2026operational,ruhlingcachay2026ucast,couairon2026arches,zhong2025fuxiens,lang2026aifscrps}. Such systems may assign probability beyond a historical record even when their ensemble mean is conservative. However, they may still be underdispersive, poorly calibrated in the tails, or fail to provide support at the realised intensity of unprecedented events.
 
-This study extends the deterministic record-extreme benchmark to probabilistic ensemble forecasts. We evaluate the physics-based ensemble IFS-ENS together with three AI ensembles, FGN, U-Cast, and ArchesWeatherGen, using evluation metrics: point forecast summaries, record-occurrence metrics, CRPS, and margin-conditioned tail diagnostics. 
+Here, we extend the deterministic record-extreme benchmark to probabilistic ensemble forecasts. We evaluate the physics-based IFS-ENS alongside the AI ensembles FGN, U-Cast and ArchesWeatherGen using point-forecast summaries, record-occurrence diagnostics, continuous ranked probability score (CRPS), and margin-conditioned diagnostics of tail support and coverage.
 
 \section{Data and methods}
 
-In the present study, monthly records are computed from ERA5 over the reference period 1979--2018. The main variables of interest are 2m temperature and 10m wind speed. Heat records are upper records of 2m temperature, cold records are lower records of 2m temperature, and wind records are upper records of 10m wind speed. The spatial domain is restricted to the no-Antarctic 1.5$^{\circ}$ grid, approximately $60^{\circ}$S to $90^{\circ}$N. The temporal domain is restricted to 00 and 12 UTC valid times, and we use 2022 as test set.
+Monthly local records are derived from ERA5 for the 1979--2018 reference period. We consider 2-m temperature and 10-m wind speed: heat records are upper records of 2-m temperature, cold records are lower records of 2-m temperature, and wind records are upper records of 10-m wind speed. The analysis is conducted on a 1.5$^{\circ}$ grid spanning approximately $60^{\circ}$S--$90^{\circ}$N, excluding Antarctica, and is restricted to valid times at 00 and 12 UTC. Forecasts are evaluated for 2022.
 
-More formally, let $x_{s,t}$ denote a weather variable at grid cell $s$ and verification time $t$. For variable $x$, grid cell $s$, and calendar month $m$, define the historical upper record over the reference period $T_{\mathrm{train}}$ (1979--2018) as
+Let $x_{s,t}$ denote a weather variable at grid cell $s$ and verification time $t$. For calendar month $m$, the local historical upper and lower records over the reference period $T_{\mathrm{ref}} =$ 1979--2018 are 
 \begin{equation}
     r^{x,+}_{s,m} = \max_{t \in T_{\mathrm{train}}: m(t)=m} x_{s,t},
     \label{eq:upperrecord}
 \end{equation}
-and the lower record as
+and
 \begin{equation}
     r^{x,-}_{s,m} = \min_{t \in T_{\mathrm{train}}: m(t)=m} x_{s,t}.
     \label{eq:lowerrecord}
@@ -64,15 +65,15 @@ whereas a lower-tail record occurs if
     y^{-}_{s,t} = \mathbb{1}\{x_{s,t} < r^{x,-}_{s,m(t)}\}=1.
     \label{eq:lowerindicator}
 \end{equation}
-The test set is therefore composed of grid-time pairs that are unprecedented relative to the local seasonal historical range of 1979--2018. 
+Thus, record events are grid-time pairs whose verifying values exceed the local, month-specific historical range.
 
-The processed forecast set contains the ECMWF's physics-based IFS-ENS ensemble and three probabilistic AI systems: FGN, ArchesWeatherGen, and U-Cast~\citep{alet2026operational,couairon2026arches,ruhlingcachay2026ucast}. At a high level, the three models represent three major directions in AI-based weather forecasting: FGN uses a graph-transformer architecture, with a graph neural network mapping latitude-longitude fields to a multilevel icosahedral mesh and a graph-transformer processor operating there; its probabilistic character comes from learned, globally shared functional perturbations of the network parameters, combined with a deep ensemble, allowing it to model forecast uncertainty while optimizing the continuous ranked probability score (CRPS). ArchesWeatherGen uses a 3D Swin U-Net transformer on the atmospheric latitude-longitude-vertical grid, enhanced with cross-level attention, and generates ensembles through flow matching: a deterministic ArchesWeather prediction provides the mean state while a generative model samples the residual uncertainty and is rolled out autoregressively. U-Cast, on the other hand, uses a conventional convolutional U-Net with bottleneck self-attention, Monte Carlo dropout for stochasticity, and a deterministic-to-probabilistic training curriculum from mean absolute error (MAE) to CRPS. 
+We evaluate ECMWF's physics-based IFS-ENS and three probabilistic AI systems: FGN, ArchesWeatherGen and U-Cast \citep{alet2026operational,couairon2026arches,ruhlingcachay2026ucast}. FGN combines a graph-based architecture with learned functional perturbations and a deep ensemble, and is trained to optimize CRPS. ArchesWeatherGen generates residual uncertainty around a deterministic ArchesWeather forecast using flow matching. U-Cast combines a convolutional U-Net with Monte Carlo dropout and a deterministic-to-probabilistic training curriculum. Together, these systems represent distinct approaches to generating probabilistic weather forecasts.
 
 \subsection{Evaluation and metrics}
 
-IFS-ENS is evaluated with 50 members. FGN, U-Cast, and ArchesWeatherGen are evaluated with 64 members. The processed lead times are 12, 48, 120, 168, and 240 h for IFS-ENS, FGN, and U-Cast, with 12-hourly data missing for ArchesWeatherGen. Moreover, IFS-ENS is verified against HRES-fc0, the deterministic ECMWF forecast initialized at the same time as the ensemble. FGN, U-Cast, and ArchesWeatherGen are verified against ERA5. Below we discuss the different evaluation metrics used to assess the (probabilistic) forecasts. 
+IFS-ENS is evaluated with 50 ensemble members, whereas FGN, U-Cast and ArchesWeatherGen are evaluated with 64 members. For IFS-ENS, FGN and U-Cast, forecasts are available at lead times of 12, 48, 120, 168 and 240 h. ArchesWeatherGen is evaluated at the available lead times, but lacks 12-hourly output. IFS-ENS is verified against HRES-fc0, the deterministic ECMWF forecast initialized concurrently with the ensemble, whereas the AI systems are verified against ERA5. The following sections describe the metrics used to assess point-forecast, record-occurrence and distributional skill. 
 
-\subsubsection{Point forecasts}
+\subsubsection{Point forecast}
 
 An ensemble forecast with $K$ members for variable $x$ at grid cell $s$, initialization time $t_0$, and lead time $\tau$ is
 \begin{equation}
@@ -171,7 +172,7 @@ This metric directly asks whether the event was inside the ensemble support at a
 
 \subsubsection{Continuous ranked probability score}
 
-The continuous ranked probability score is a proper scoring rule for real-valued probabilistic forecasts \citep{gneiting2007strictly, jordan2019scoringrules}. For predictive distribution $F^{\tau}_{s,t_0}$ and observation $x_{s,t_0+\tau}$,
+The continuous ranked probability score is a proper scoring rule for real-valued probabilistic forecasts \citep{gneiting2007strictly, jordan2019scoringrules}. For predictive distribution $F^{\tau}_{s,t_0}$ and observation $x_{s,t_0+\tau}$, it is given by
 \begin{equation}
     \mathrm{CRPS}\left(F^{\tau}_{s,t_0}, x_{s,t_0+\tau}\right)
     = \int_{-\infty}^{\infty}\left(F^{\tau}_{s,t_0}(z)-\mathbb{1}\{x_{s,t_0+\tau}\le z\}\right)^2\,dz.
@@ -209,40 +210,42 @@ with the inequality reversed for lower records. The 90\% coverage diagnostic che
 
 \section{Results}
 
-\subsection{Point Summaries Recover Lead-Dependent Record Attenuation}
+\subsection{Ensemble-mean point skill shows attenuation of record intensity}
 
-We first collapse each ensemble to its mean, following the point-forecast perspective of \citet{zhang2026recordextremes}. This is a useful bridge to deterministic verification, but it deliberately discards ensemble spread and probability information. Across all-domain, all-season record events, RMSE increases with lead time and the signed biases have the expected attenuating direction: heat and wind records are too cold and too weak, whereas cold records are too warm (Figure~\ref{fig:pointskill}). The result is shared by the physics-based and AI ensembles, although its magnitude differs by event type and lead time. Thus, probabilistic sampling alone does not remove the point-forecast record-extreme problem.
+We first reduce each ensemble to its mean to enable comparison with the deterministic verification framework of \citet{zhang2026recordextremes}. Across all-domain, all-season record events, RMSE increases with lead time, while biases consistently attenuate event intensity: heat and wind records are forecast too cold and too weak, respectively, whereas cold records are forecast too warm (Figure~\ref{fig:pointskill}). This pattern occurs in both physics-based and AI ensembles, with magnitudes that vary by event type and lead time. Conditioning on season and land--sea reveals substantial differences in terms of performance. In particular, long-lead biases are amplified for JJA land heat records and DJF land cold records (Supplementary Figures~\ref{fig:supp-point-jja-land}--\ref{fig:supp-point-djf-land}). 
 
-The complete seasonal and land--sea inventory shows substantial heterogeneity. In particular, JJA land heat and DJF land cold records amplify the corresponding long-lead biases (Supplementary Figures~S1--S2). We use these point summaries as context for the probabilistic analysis below rather than as the primary test of an ensemble forecast.
-
-\begin{figure}[t]
+\begin{figure}[t!]
 \centering
 \includegraphics[width=0.96\linewidth]{fig/point_all_all.png}
 \caption{All-domain, all-season ensemble-mean point skill for 2022 record events. Rows show RMSE and bias; columns show heat, cold, and wind records. Negative heat and wind bias and positive cold bias correspond to attenuation of record intensity.}
 \label{fig:pointskill}
 \end{figure}
 
-\subsection{AI Ensembles Improve Record-Occurrence Forecasting, With Calibration Caveats}
+\subsection{AI ensembles improve record-occurence forecasting}
 
-The full ensemble changes the question from the predicted record value to the probability that a record occurs. Expected-minus-observed counts show that this probability mass is event- and lead-dependent (Figure~\ref{fig:counts}); the Brier score provides the more direct aggregate assessment of numerical probability quality (Figure~\ref{fig:brier}). Across the evaluated settings, the AI ensembles generally have lower Brier scores than IFS-ENS, most clearly for heat records. This is evidence that probabilistic AI can improve the anticipation of record occurrence, although the mixed verification targets require this comparison to be interpreted as a comparison of the current operational evaluation settings rather than a target-harmonized leaderboard.
+We now move to probabilistic evaluation and evaluate the full ensemble rather than its mean. The expected-minus-observed counts (Figure~\ref{fig:counts}) and Brier scores (Figure~\ref{fig:brier}) show that AI ensembles generally provide more accurate record probabilities than IFS-ENS, particularly for heat records. However, as mentioned before, note that the mixed verification targets complicate direct model ranking: IFS-ENS is verified against HRES-fc0, whereas the AI ensembles are verified against ERA5. 
 
-At the common 48 h lead, precision--recall curves show that this difference is operationally relevant under the severe rarity of records, while reliability diagrams show that discrimination does not imply perfect calibration (Figure~\ref{fig:occurrence}). The AI systems can assign useful probability to heat and cold records, but some probability ranges, especially for wind, remain overconfident. Taken together, the occurrence diagnostics support an AI advantage for threshold anticipation, not a universal claim that every AI system is best in every regime.
+Considering a 48 h lead, precision--recall curves in the top panel of Figure~\ref{fig:occurrence} show that the AI ensembles generally have higher precision and recall than IFS-ENS, with the largest advantage for heat records. The bottom panel of Figure~\ref{fig:occurrence} shows reliability diagrams for the same 48 h lead. The AI ensembles are generally better calibrated than IFS-ENS, however, with a notable overconfidence, in particular for wind records. Similar results are obtained for 120 h, 168 h and 240 h leads (Supplementary Figures~\ref{fig:occurrence-120}--\ref{fig:occurrence-240}).
 
-\begin{figure}[t]
+When it come to CRPS, record-conditioned CRPS (solid line) is substantially larger than all-weather CRPS (dashed line) for every event type and system, especially for wind at long lead (Figure~\ref{fig:crps}). Record extremes are therefore a distinct and harder probabilistic verification regime.
+
+Finally, the zero-probability miss rate reveals whether observed records fall outside the ensemble support altogether (Table~\ref{tab:zeromiss}). For heat records, the AI ensembles generally assign nonzero probability more often than IFS-ENS: at 48 h, IFS-ENS assigns zero probability to 47.5\% of observed heat records, compared with 5.4\%, 9.1\% and 9.0\% for U-Cast, FGN and ArchesWeatherGen, respectively. This pattern is not uniform across event types. IFS-ENS has lower zero-probability miss rates for cold records, whereas FGN remains particularly effective at retaining support for wind records at longer lead times. Zero-probability misses increase for several models with lead time, especially for wind, showing that nonzero threshold support remains difficult even where aggregate occurrence scores are favourable. 
+
+\begin{figure}[t!]
 \centering
 \includegraphics[width=0.96\linewidth]{fig/counts_all_all.png}
-\caption{All-domain, all-season expected-minus-observed record counts. Positive values indicate that the ensemble assigns too much record probability in aggregate; negative values indicate too little.}
+\caption{All-domain, all-season expected-minus-observed record counts. Positive values indicate that the ensemble assigns too much record probability; negative values indicate too little.}
 \label{fig:counts}
 \end{figure}
 
-\begin{figure}[t]
+\begin{figure}[t!]
 \centering
 \includegraphics[width=0.96\linewidth]{fig/brier_all_all.png}
-\caption{All-domain, all-season Brier scores for record occurrence. Lower values indicate more accurate numerical record probabilities.}
+\caption{All-domain, all-season Brier scores for record occurrence. Lower values indicate more accurate probabilistic forecasts.}
 \label{fig:brier}
 \end{figure}
 
-\begin{figure}[t]
+\begin{figure}[t!]
 \centering
 \includegraphics[width=0.96\linewidth]{fig/precision_recall_48h_all_all.png}
 \includegraphics[width=0.96\linewidth]{fig/reliability_48h_all_all.png}
@@ -250,26 +253,46 @@ At the common 48 h lead, precision--recall curves show that this difference is o
 \label{fig:occurrence}
 \end{figure}
 
-\subsection{Record-Conditioned Distributional Skill Remains Difficult}
-
-CRPS assesses the full predictive distribution rather than its mean or its threshold-crossing probability. Record-conditioned CRPS (solid) is substantially larger than all-weather CRPS (dashed) for every event type and system, especially for wind at long lead (Figure~\ref{fig:crps}). Record extremes are therefore a distinct and harder probabilistic verification regime.
-
-The occurrence advantage of AI does not translate uniformly into conditional intensity skill. At long leads, IFS-ENS remains competitive, and often stronger, for cold and wind record CRPS. Physics-based ensembles therefore remain appropriate when the operational question concerns the realized intensity conditional on a record occurring, rather than threshold occurrence alone.
-
-\begin{figure}[t]
+\begin{figure}[t!]
 \centering
 \includegraphics[width=0.96\linewidth]{fig/crps_all_all.png}
 \caption{All-domain, all-season CRPS. Solid curves are conditioned on observed heat, cold, or wind records; dashed curves are all-weather CRPS. Lower values are better.}
 \label{fig:crps}
 \end{figure}
 
-\subsection{Threshold Support Does Not Guarantee Intensity Support}
+\begin{table}[t!]
+\centering
+\caption{Zero-probability miss rate, $\Pr(\hat{p}^{\tau}=0 \mid y^{\tau}=1)$, for all-domain, all-season observed record events. The rate is the unweighted fraction of observed record grid-time pairs for which no ensemble member crossed the local historical record; lower values are better.}
+\label{tab:zeromiss}
+\begin{tabular}{llrrr}
+\toprule
+Record type & Model & 12 h & 48 h & 120 h \\
+\midrule
+Heat & IFS-ENS & 0.282 & 0.475 & 0.448 \\
+Heat & U-Cast & \textbf{0.016} & \textbf{0.054} & 0.138 \\
+Heat & FGN & 0.120 & 0.091 & \textbf{0.105} \\
+Heat & ArchesWeatherGen & -- & 0.090 & 0.176 \\
+\midrule
+Cold & IFS-ENS & 0.055 & 0.140 & \textbf{0.172} \\
+Cold & U-Cast & \textbf{0.025} & \textbf{0.079} & 0.187 \\
+Cold & FGN & 0.249 & 0.201 & 0.234 \\
+Cold & ArchesWeatherGen & -- & 0.120 & 0.205 \\
+\midrule
+Wind & IFS-ENS & 0.042 & 0.072 & 0.171 \\
+Wind & U-Cast & 0.060 & 0.113 & 0.247 \\
+Wind & FGN & \textbf{0.038} & \textbf{0.042} & \textbf{0.119} \\
+Wind & ArchesWeatherGen & -- & 0.136 & 0.260 \\
+\bottomrule
+\end{tabular}
+\end{table}
 
-Margin-conditioned diagnostics provide the sharpest test of the probabilistic record-extreme hypothesis. As the observed record margin increases, CRPS and ensemble-mean error generally worsen in the attenuating direction (Figure~\ref{fig:margin-intensity}). Simultaneously, an ensemble can retain appreciable mean record probability while its coverage declines and its out-of-ensemble rate rises (Figure~\ref{fig:margin-probabilistic}).
+\subsection{Forecasting record occurrence does not ensure accurate record intensity}
 
-For heat records at 120 h and a 4 K margin, the AI ensembles still assign mean record probabilities of roughly 0.77--0.85, but their empirical 90\% coverage is only about 0.13--0.30. Hence, an ensemble can anticipate that the historical threshold will be crossed while failing to extend sufficiently far into the realized tail. Cold and some wind margin subsets become sparse at large margins; those curves are retained as stress-test evidence in the Supplementary Materials rather than used for precise ranking.
+Margin-conditioned diagnostics provide the most direct assessment of whether ensemble forecasts represent the intensity of the most unprecedented events. As the observed record margin increases, record-conditioned CRPS and ensemble-mean errors generally increase, with biases remaining directed towards less extreme values (Figure~\ref{fig:margin-intensity}). At the same time, ensembles can retain substantial mean probability of record occurrence while empirical 90\% coverage declines and out-of-ensemble rates increase (Figure~\ref{fig:margin-probabilistic}).
 
-The combined evidence gives a practical answer to the central question. Probabilistic AI improves record-occurrence forecasting, particularly for heat, but does not yet justify replacing physics-based ensembles across the record-extreme problem. Physics-based systems remain a valuable reference for conditional intensity and severe cold/wind tails; the two forecasting paradigms are presently complementary.
+For heat records exceeding the historical record by 4~K at 120~h, the AI ensembles assign mean record probabilities of approximately 0.77--0.85, yet their empirical 90\% coverage is only 0.13--0.30. Thus, an ensemble may correctly anticipate that the historical threshold will be exceeded while failing to extend sufficiently far into the realised tail. The largest-margin cold and wind subsets contain relatively few events; we therefore interpret the corresponding curves as stress tests of tail support rather than as precise model rankings.
+
+Together, these results distinguish two requirements for credible probabilistic forecasting of record extremes. First, the forecast must assign appropriate probability to record occurrence. Second, it must provide sufficient distributional support for the realised event intensity. The AI ensembles generally improve record-occurrence forecasting, particularly for heat, but this advantage does not consistently extend to conditional intensity skill or tail coverage. IFS-ENS remains competitive for cold and wind record intensity, especially at longer lead times, within the present evaluation.
 
 \begin{figure}[t]
 \centering
@@ -287,27 +310,21 @@ The combined evidence gives a practical answer to the central question. Probabil
 
 \section{Discussion}
 
-Record-breaking extremes are a stringent benchmark because they combine rarity, societal relevance, and extrapolation beyond local seasonal history. Deterministic AI forecasts can be highly skillful on average while attenuating records \citep{zhang2026recordextremes}. Probabilistic AI forecasts change the question but do not remove the need for direct tail evaluation. An ensemble may improve on deterministic soft-cap behavior by assigning probability mass beyond the historical record, yet still fail by remaining underdispersive, by concentrating support just above the threshold rather than near the observed intensity, or by issuing poorly calibrated high probabilities.
+Record-breaking heat, cold and wind provide a demanding test of probabilistic weather forecasts because they lie beyond the local, month-specific historical range. The results show that record events are harder to forecast than average weather: record-conditioned CRPS exceeds all-weather CRPS across all evaluated systems and event types, with the largest degradation for wind at longer lead times. Performance also varies substantially by event type, lead time, season and land--sea class, indicating that record extremes cannot be treated as a single homogeneous verification problem.
 
-The present diagnostics separate those possibilities. Point-summary RMSE and bias reveal whether the center of the ensemble inherits deterministic attenuation. Expected-minus-observed counts indicate whether records are over- or underforecast in expectation. Brier scores and reliability summaries ask whether record probabilities are numerically usable. Zero-probability miss rates identify cases for which the ensemble never entered the record side of the threshold. CRPS evaluates the full predictive distribution, and margin-conditioned out-of-ensemble and coverage diagnostics ask whether the distribution reaches the observed intensity of the most unprecedented events. Together, these diagnostics show that probabilistic record forecasting should be evaluated on at least two levels: threshold support and intensity support.
+The full ensemble improves the assessment beyond ensemble-mean errors. AI ensembles generally produce more accurate probabilities of record occurrence than IFS-ENS, especially for heat. At 48~h, for example, U-Cast, FGN and ArchesWeatherGen assign zero probability to only 5.4\%, 9.1\% and 9.0\% of observed heat records, respectively, compared with 47.5\% for IFS-ENS. However, this advantage is not uniform across variables or metrics. IFS-ENS has lower zero-probability miss rates for cold records, while FGN retains the strongest threshold support for wind records at longer lead times. Reliability diagnostics further show that useful discrimination does not ensure calibrated probabilities, particularly for wind.
 
-Three findings stand out from the current result set. First, record-breaking events are a distinct probabilistic verification regime. Scores that look strong for average weather can degrade sharply when evaluation is restricted to unprecedented events. Second, forecast behavior is strongly structured by event type, lead time, season, and land-sea class. Long-lead JJA land heat records, DJF land cold records, and wind records over sea points do not behave like interchangeable subsets of one common tail problem. Third, margin-conditioned diagnostics show why record probability alone is insufficient. Several models retain substantial mean probability of threshold exceedance while simultaneously losing coverage and exhibiting higher out-of-ensemble rates in the largest-margin subsets.
+Most importantly, predicting record occurrence does not guarantee that the forecast distribution represents the realised record intensity. For 120-h heat records exceeding the previous record by 4~K, the AI ensembles retain mean record probabilities of approximately 0.77--0.85, but their empirical 90\% coverage is only 0.13--0.30. Increasing record margins are generally accompanied by larger distributional errors, reduced coverage and more observations outside the ensemble range. These results show that probabilistic evaluation of record extremes should assess both occurrence probabilities and tail coverage at the realised intensity.
 
-At the same time, the current manuscript should be read with several methodological cautions in mind. The most immediate is verification. ERA5 is a high-quality global reanalysis and a practical common benchmark, but it is not direct observation, and its uncertainty varies by variable and region \citep{hersbach2020era5, rasp2024weatherbench2}. HRES-fc0 is a sensible operational reference, but mixed verification targets complicate direct model ranking. A second caution is temporal scope. The present analysis emphasizes the 2022 processed outputs, which are already scientifically informative but do not yet establish year-to-year robustness. A third caution is dependence. Record events cluster in space and time because individual heatwaves, cold-air outbreaks, and storm systems generate many neighboring record grid-time points. Confidence intervals based on block or event-level resampling are therefore a priority extension.
-
-Several near-term improvements are already supported by the current workflow. The occurrence figure and table presented here summarize only one common lead and can be expanded in the Supplementary Information to cover every processed lead, season, and land-sea class. The margin files contain all ingredients needed for a dedicated coverage and out-of-ensemble panel across multiple lead times. Median-based point and margin diagnostics are also available and are natural supplement material. Beyond presentation, the most important scientific extensions are multi-year evaluation, common-verification sensitivity analysis, forecast-conditioned diagnostics for the forecaster's dilemma, and uncertainty quantification that respects spatiotemporal dependence.
+The analysis has several limitations. IFS-ENS is verified against HRES-fc0, whereas the AI ensembles are verified against ERA5; direct cross-model comparisons therefore describe the present evaluation configurations rather than a common-target ranking. The analysis is restricted to 2022, and record events are spatially and temporally dependent, so the results do not establish multi-year robustness or uncertainty estimates. Priorities for future work are multi-year evaluation, sensitivity to a common verification target, and block- or event-based resampling to quantify uncertainty under spatiotemporal dependence.
 
 \section{Conclusions}
 
-We presented a probabilistic benchmark for record-breaking heat, cold, and wind that extends the deterministic record-extreme framework of \citet{zhang2026recordextremes} to ensemble weather forecasts. Using 2022 forecasts from IFS-ENS, FGN, U-Cast, and ArchesWeatherGen, we evaluated point summaries, occurrence probabilities, Brier scores, reliability-related summaries, CRPS, and margin-conditioned tail diagnostics.
+We have extended the deterministic record-extreme benchmark from \citep{zhang2026recordextremes} to probabilistic ensemble forecasts of record-breaking heat, cold and wind. Across 2022 forecasts from IFS-ENS, FGN, U-Cast and ArchesWeatherGen, record-conditioned CRPS is consistently larger than all-weather CRPS, confirming that record extremes are a distinct and more demanding verification regime. AI ensembles generally improve record-occurrence prediction, particularly for heat, but performance varies by event type and lead time. Calibration remains imperfect, especially for wind, and IFS-ENS remains competitive for cold and wind record intensity at longer lead times.
 
-The results show that record-breaking extremes are not merely rare versions of average-weather verification. They expose structured weaknesses that depend on event type, lead time, season, and surface regime. Some AI ensembles represent heat-record occurrence and intensity competitively in parts of this design space, but cold records and especially wind records remain substantially more fragile. Most importantly, probabilistic forecast quality cannot be summarized by threshold crossing alone. A useful record forecast must both assign support beyond the historical record and retain enough tail coverage to contain the realized event intensity.
+The results show that record occurrence and record intensity must be assessed separately. Ensembles can assign substantial probability to exceeding a historical record while failing to cover the realised intensity of the event. Margin-conditioned diagnostics therefore complement occurrence scores by testing whether the predictive distribution extends sufficiently far into the observed tail. Record-breaking extremes should be adopted as a stress test for probabilistic AI weather forecasts, using diagnostics that jointly assess occurrence probabilities, conditional intensity and tail coverage.
 
-These findings support record-breaking extremes as a standard stress test for probabilistic AI weather forecasts. They also show that progress should be evaluated not only with average skill scores, but with diagnostics that directly test tail calibration, tail support, and tail coverage.
-
-\section*{Data and Code Availability}
-
-The evaluation code is organized under \texttt{download/}, \texttt{eval/}, \texttt{viz/}, and \texttt{job\_scripts/}. Processed score files are stored under \texttt{results/<model>/<metric>/}. A batch plotting script in \texttt{viz/} generates the complete stratified figure inventory under \texttt{manuscript/fig/stratified/}; the occurrence-probability files contain both reliability diagrams and precision-recall curves at the common 48 h lead. Persistent archive links and final data-access instructions will be added before submission.
+\section*{Data and code availability}
 
 \section*{Acknowledgments}
 
@@ -317,5 +334,85 @@ The evaluation code is organized under \texttt{download/}, \texttt{eval/}, \text
 \appendix
 
 \section{Supplementary materials}
+
+\begin{figure}[p]
+\centering
+\includegraphics[width=0.96\linewidth]{fig/point_JJA_land.png}
+\caption{Ensemble-mean point skill for JJA land record events. Rows show RMSE and bias; columns show heat, cold and wind records. Negative heat and wind bias and positive cold bias indicate systematic underestimation of record magnitude.}
+\label{fig:supp-point-jja-land}
+\end{figure}
+
+\begin{figure}[p]
+\centering
+\includegraphics[width=0.96\linewidth]{fig/point_DJF_land.png}
+\caption{AsEnsemble-mean point skill for DJF land record events. Rows show RMSE and bias; columns show heat, cold and wind records. Negative heat and wind bias and positive cold bias indicate systematic underestimation of record magnitude.}
+\label{fig:supp-point-djf-land}
+\end{figure}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.96\linewidth]{fig/precision_recall_120h_all_all.png}
+\includegraphics[width=0.96\linewidth]{fig/reliability_120h_all_all.png}
+\caption{All-domain, all-season occurrence discrimination and calibration at 120 h. Top: precision--recall curves for probability-threshold alarms. Bottom: reliability diagrams; the diagonal denotes perfect calibration.}
+\label{fig:occurrence-120}
+\end{figure}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.96\linewidth]{fig/precision_recall_168h_all_all.png}
+\includegraphics[width=0.96\linewidth]{fig/reliability_168h_all_all.png}
+\caption{All-domain, all-season occurrence discrimination and calibration at 168 h. Top: precision--recall curves for probability-threshold alarms. Bottom: reliability diagrams; the diagonal denotes perfect calibration.}
+\label{fig:occurrence-168}
+\end{figure}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.96\linewidth]{fig/precision_recall_240h_all_all.png}
+\includegraphics[width=0.96\linewidth]{fig/reliability_240h_all_all.png}
+\caption{All-domain, all-season occurrence discrimination and calibration at 240 h. Top: precision--recall curves for probability-threshold alarms. Bottom: reliability diagrams; the diagonal denotes perfect calibration.}
+\label{fig:occurrence-240}
+\end{figure}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.96\linewidth]{fig/margin_intensity_48h_all.png}
+\caption{All-domain, all-season margin-conditioned intensity diagnostics at 48 h. Rows show CRPS, ensemble-mean RMSE, and ensemble-mean bias for records exceeding each margin threshold.}
+\label{fig:margin-intensity-48}
+\end{figure}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.96\linewidth]{fig/margin_probabilistic_48h_all.png}
+\caption{All-domain, all-season margin-conditioned probabilistic diagnostics at 48 h. Rows show mean record probability, out-of-ensemble rate, and empirical 90\% coverage.}
+\label{fig:margin-probabilistic-48}
+\end{figure}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.96\linewidth]{fig/margin_intensity_168h_all.png}
+\caption{All-domain, all-season margin-conditioned intensity diagnostics at 168 h. Rows show CRPS, ensemble-mean RMSE, and ensemble-mean bias for records exceeding each margin threshold.}
+\label{fig:margin-intensity-168}
+\end{figure}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.96\linewidth]{fig/margin_probabilistic_168h_all.png}
+\caption{All-domain, all-season margin-conditioned probabilistic diagnostics at 168 h. Rows show mean record probability, out-of-ensemble rate, and empirical 90\% coverage.}
+\label{fig:margin-probabilistic-168}
+\end{figure}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.96\linewidth]{fig/margin_intensity_240h_all.png}
+\caption{All-domain, all-season margin-conditioned intensity diagnostics at 240 h. Rows show CRPS, ensemble-mean RMSE, and ensemble-mean bias for records exceeding each margin threshold.}
+\label{fig:margin-intensity-240}
+\end{figure}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.96\linewidth]{fig/margin_probabilistic_240h_all.png}
+\caption{All-domain, all-season margin-conditioned probabilistic diagnostics at 240 h. Rows show mean record probability, out-of-ensemble rate, and empirical 90\% coverage.}
+\label{fig:margin-probabilistic-240}
+\end{figure}
 
 \end{document}
