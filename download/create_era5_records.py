@@ -7,7 +7,7 @@ Outputs (written into --out-root):
     ERA5_record_max_month_<record-tag>_w10.nc
     ERA5_lsm_sfc.nc
 
-By default, records are computed from ERA5 years 1979-2018 and only
+By default, records are computed from ERA5 years 1979-2021 and only
 00/12 UTC timestamps to match forecast verification times.
 """
 
@@ -71,11 +71,11 @@ parser.add_argument("--era5-zarr", type=str, default=str(era5_truth_default),
                     help="Path to ERA5 Zarr store.")
 parser.add_argument("--out-root", type=str, default=str(era5_root_default),
                     help="Directory where record files are written.")
-parser.add_argument("--record-tag", type=str, default="1979_2018",
+parser.add_argument("--record-tag", type=str, default="1979_2021",
                     help="Tag used in output filenames.")
 parser.add_argument("--start-year", type=int, default=1979,
                     help="First year in climatology window.")
-parser.add_argument("--end-year", type=int, default=2018,
+parser.add_argument("--end-year", type=int, default=2021,
                     help="Last year in climatology window.")
 parser.add_argument("--hours", type=str, default="0,12",
                     help="Comma-separated UTC hours used for climatology, e.g. '0,12'.")

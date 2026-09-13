@@ -11,7 +11,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Truth data (ERA5, HRES_fc0)
 - ERA5 records
 
-GenCast has been removed from evaluation.
+GenCast has been removed from evaluation - for now.
 
 ## Environment
 

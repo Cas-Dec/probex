@@ -1,4 +1,6 @@
-
+#####################################
+# Calculate Brier score for records
+#####################################
 from __future__ import annotations
 
 import argparse
@@ -6,7 +8,6 @@ import gc
 import os
 from datetime import datetime
 from pathlib import Path
-
 import xarray as xr
 
 import functions_occurrence

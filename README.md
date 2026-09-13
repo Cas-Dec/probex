@@ -1,7 +1,7 @@
 
-# probex: Probabilistic Ensemble Forecast Evaluation
+# probex: Probabilistic Ensemble Forecast Evaluation On Extremes
 
-Evaluates probabilistic ensemble weather forecasts (IFS_ENS, FGN, ArchesWeatherGen and UCast) against verification data (ERA5, HRES-fc0) with a focus on record-breaking extremes. Computes CRPS, deterministic point scores, probabilistic occurrence/reliability metrics, and margin-conditioned scores at 1.5° resolution.
+Evaluates probabilistic ensemble weather forecasts (IFS_ENS, FGN, ArchesWeatherGen and UCast, GenCast) against verification data (ERA5, HRES-fc0) with a focus on record-breaking extremes. Computes CRPS, deterministic point scores, probabilistic occurrence/reliability metrics, and margin-conditioned scores at 1.5° resolution.
 
 ## Installation & Environment Setup
 

@@ -1,8 +1,6 @@
 """
 CRPS utilities for probabilistic ensemble forecasts.
 
-This simplified version assumes the file structure used in our current workflow.
-
 Expected forecast dimensions:
     time, number, prediction_timedelta, latitude, longitude
 
@@ -33,7 +31,6 @@ import functions
 
 
 dask.config.set({"array.slicing.split_large_chunks": True})
-
 
 # =============================================================================
 # Ensemble CRPS
@@ -103,7 +100,11 @@ def ensemble_crps_sorted(
 
     return crps
 
-
+# =============================================================================
+# Threshold-weighted CRPS (twCRPS), with for every grid cell and month
+# a different threshold.
+# =============================================================================
+# so basically we run this on all cases, instead of conditioned only on records
 # =============================================================================
 # Weighted CRPS summaries
 # =============================================================================

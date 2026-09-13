@@ -31,7 +31,7 @@ MODEL_CONFIG = {
     },
     "ArchesWeatherGen": {
         "leads": [48, 120, 168, 240],
-        "n_members": 64,
+        "n_members": 64, # should we subsample to 50 for fair comparison?
         "resolution_tag": "1p50",
     },
     "uCast": {
