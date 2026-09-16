@@ -120,7 +120,7 @@ record_min_file = records_root / f"ERA5_record_min_month_{record_tag}_{var}.nc"
 lsm_file = records_root / "ERA5_lsm_sfc.nc" #land sea mark (0 and 1s; from zhang)
 
 print("--------------------------")
-print("CRPS forecast evaluation")
+print("Fair CRPS and record-threshold weighted CRPS evaluation")
 print("--------------------------")
 print(f"year    : {year}")
 print(f"var     : {var}")
@@ -167,8 +167,12 @@ if var == "t2m":
 
 crps_by_case = {case: [] for case in cases}
 stat_by_case = {case: [] for case in cases}
+rtw_cases = ["max"]
+if var == "t2m":
+    rtw_cases.append("min")
+rtwcrps_by_case = {case: [] for case in rtw_cases}
+rtwstat_by_case = {case: [] for case in rtw_cases}
 
-# until here everything works perfectly.
 for i, lead_hour in enumerate(leads, start=1):
     forecast_file = (
         forecast_root / model
@@ -191,11 +195,26 @@ for i, lead_hour in enumerate(leads, start=1):
         lsm, # separate scores for land and sea and all
         eval_start,
         eval_end,
-    ) # what are crps and stat?
+    )
 
     crps_by_case["max"].append(crps) # sel by leadtime, season, landsea
     stat_by_case["max"].append(stat) # size (# valid grid-time events), mean crps, variance of the crps (before averaging)
     print("DONE max records")
+
+    print("START max rtwCRPS (all cases)")
+    rtwcrps, rtwstat = functions_crps.ENS_CRPS_landseasep(
+        forecast,
+        truth_da,
+        mask_all,
+        lsm,
+        eval_start,
+        eval_end,
+        record_threshold=record_max,
+        tail="max",
+    )
+    rtwcrps_by_case["max"].append(rtwcrps)
+    rtwstat_by_case["max"].append(rtwstat)
+    print("DONE max rtwCRPS")
     
     print("START all data")
     crps, stat = functions_crps.ENS_CRPS_landseasep(
@@ -226,6 +245,21 @@ for i, lead_hour in enumerate(leads, start=1):
         stat_by_case["min"].append(stat)
         print("DONE min records")
 
+        print("START min rtwCRPS (all cases)")
+        rtwcrps, rtwstat = functions_crps.ENS_CRPS_landseasep(
+            forecast,
+            truth_da,
+            mask_all,
+            lsm,
+            eval_start,
+            eval_end,
+            record_threshold=record_min,
+            tail="min",
+        )
+        rtwcrps_by_case["min"].append(rtwcrps)
+        rtwstat_by_case["min"].append(rtwstat)
+        print("DONE min rtwCRPS")
+
     del forecast # get it out of memory asap (before the next lead time is loaded)
     gc.collect() # free memory
 
@@ -239,6 +273,8 @@ for case in cases: # max all and min (only for t2m)
     crps.attrs["verification_target"] = truth
     crps.attrs["record_tag"] = record_tag
     crps.attrs["domain"] = "no_Antarctic"
+    crps.attrs["estimator"] = "fair ensemble CRPS"
+    crps.attrs["reference"] = "Ferro (2014), doi:10.1002/qj.2270"
     stat.attrs["verification_target"] = truth
     stat.attrs["record_tag"] = record_tag
     stat.attrs["domain"] = "no_Antarctic"
@@ -253,5 +289,45 @@ for case in cases: # max all and min (only for t2m)
     print(f"Saved {case}:")
     print(f"  {crps_file}")
     print(f"  {stat_file}")
+
+print("\nCombining and saving rtwCRPS outputs...")
+for case in rtw_cases:
+    rtwcrps = xr.concat(
+        rtwcrps_by_case[case],
+        dim="leadtime",
+    ).sortby("leadtime")
+    rtwstat = xr.concat(
+        rtwstat_by_case[case],
+        dim="leadtime",
+    ).sortby("leadtime")
+
+    for output in [rtwcrps, rtwstat]:
+        output.attrs["verification_target"] = truth
+        output.attrs["record_tag"] = record_tag
+        output.attrs["domain"] = "no_Antarctic"
+        output.attrs["tail"] = case
+        output.attrs["case_selection"] = "all verification cases"
+
+    rtwcrps.attrs["estimator"] = "fair record-threshold weighted CRPS"
+    rtwcrps.attrs["reference"] = (
+        "Gneiting and Ranjan (2011), doi:10.1198/jbes.2010.08110; "
+        "fair correction: Ferro (2014), doi:10.1002/qj.2270"
+    )
+
+    rtwcrps_file = out_dir / (
+        f"{model}_{case}_rtwCRPS_{year}_{var}_"
+        f"no_Antarctic_records_{record_tag}_{truth}.nc"
+    )
+    rtwstat_file = out_dir / (
+        f"{model}_{case}_rtwCRPS_stat_{year}_{var}_"
+        f"no_Antarctic_records_{record_tag}_{truth}.nc"
+    )
+
+    rtwcrps.to_netcdf(rtwcrps_file)
+    rtwstat.to_netcdf(rtwstat_file)
+
+    print(f"Saved {case} rtwCRPS:")
+    print(f"  {rtwcrps_file}")
+    print(f"  {rtwstat_file}")
 
 print("\nDone.")

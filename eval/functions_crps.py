@@ -33,7 +33,7 @@ import functions
 dask.config.set({"array.slicing.split_large_chunks": True})
 
 # =============================================================================
-# Ensemble CRPS
+# Fair ensemble CRPS
 # =============================================================================
 
 def ensemble_crps_sorted(
@@ -41,17 +41,17 @@ def ensemble_crps_sorted(
     truth: xr.DataArray,
 ) -> xr.DataArray:
     """
-    Empirical ensemble CRPS using the sorted-member formula.
+    FAIR ensemble CRPS using the sorted-member formula.
 
-    For ensemble members x_1,...,x_K and observation y,
-
-        CRPS = 1/K sum_k |x_k - y|
-               - 1/K^2 sum_k (2k - K - 1) x_(k),
-
-    where x_(k) are the sorted ensemble members.
+    For ensemble members x_1,...,x_M and observation y,
+        fair CRPS = 1/M sum_m |x_m - y|- 1/[M(M-1)] sum_m (2m - M - 1) x_(m),
+    where x_(m) are the sorted ensemble members. See Ferro (2014)
     """
 
     forecast, truth = xr.align(forecast, truth, join="inner")
+
+    if forecast.sizes["number"] < 2:
+        raise ValueError("Fair CRPS requires at least two ensemble members.")
 
     # Keep all ensemble members in one chunk because we sort over this dimension.
     forecast = forecast.chunk(
@@ -79,7 +79,9 @@ def ensemble_crps_sorted(
 
         term1 = np.mean(np.abs(x - np.expand_dims(y, axis=-1)), axis=-1)
 
-        coeff = (2 * np.arange(1, m + 1, dtype=x.dtype) - m - 1) / (m**2)
+        coeff = (
+            2 * np.arange(1, m + 1, dtype=x.dtype) - m - 1
+        ) / (m * (m - 1))
         term2 = np.sum(x * coeff, axis=-1)
 
         return (term1 - term2).astype(np.float32)
@@ -97,17 +99,69 @@ def ensemble_crps_sorted(
     )
 
     crps.name = "CRPS"
+    crps.attrs["estimator"] = "fair ensemble CRPS"
+    crps.attrs["reference"] = "Ferro (2014), doi:10.1002/qj.2270"
 
     return crps
 
-# =============================================================================
-# Threshold-weighted CRPS (twCRPS), with for every grid cell and month
-# a different threshold.
-# =============================================================================
-# so basically we run this on all cases, instead of conditioned only on records
-# =============================================================================
+# =====================================
+# Record-threshold weighted CRPS
+# =====================================
+
+def record_threshold_weighted_crps_sorted(
+    forecast: xr.DataArray,
+    truth: xr.DataArray,
+    record: xr.DataArray,
+    tail: str,
+) -> xr.DataArray:
+    """
+    (fair) Threshold-weighted CRPS for a record threshold.
+    For upper records (heat and wind),v_r(z) = max(z, r).
+    whereas for lower records (cold), use v_r(z) = min(z, r).
+    """
+
+    if tail not in {"max", "min"}:
+        raise ValueError("tail must be 'max' or 'min'.")
+
+    forecast, truth, record = xr.align(
+        forecast,
+        truth,
+        record,
+        join="inner",
+    )
+
+    if tail == "max":
+        forecast_transformed = xr.where(forecast > record, forecast, record)
+        truth_transformed = xr.where(truth > record, truth, record)
+    else:
+        forecast_transformed = xr.where(forecast < record, forecast, record)
+        truth_transformed = xr.where(truth < record, truth, record)
+
+    # xr.where would otherwise replace missing values by the threshold.
+    forecast_transformed = forecast_transformed.where(
+        forecast.notnull() & record.notnull()
+    )
+    truth_transformed = truth_transformed.where(
+        truth.notnull() & record.notnull()
+    )
+
+    rtwcrps = ensemble_crps_sorted(
+        forecast_transformed,
+        truth_transformed,
+    )
+    rtwcrps.name = "rtwCRPS"
+    rtwcrps.attrs["estimator"] = "fair record-threshold weighted CRPS"
+    rtwcrps.attrs["tail"] = tail
+    rtwcrps.attrs["reference"] = (
+        "Gneiting and Ranjan (2011), doi:10.1198/jbes.2010.08110; "
+        "fair correction: Ferro (2014), doi:10.1002/qj.2270"
+    )
+
+    return rtwcrps
+
+# ================================
 # Weighted CRPS summaries
-# =============================================================================
+# ================================
 
 def weighted_stats(
     field: xr.DataArray,
@@ -156,7 +210,6 @@ def weighted_stats(
 
     return size, mean, variance
 
-
 # =============================================================================
 # Main CRPS function
 # =============================================================================
@@ -168,9 +221,14 @@ def ENS_CRPS_landseasep(
     land_sea_mask: xr.DataArray,
     eval_start: datetime,
     eval_end: datetime,
+    record_threshold: xr.DataArray | None = None,
+    tail: str | None = None,
 ) -> tuple[xr.DataArray, xr.DataArray]:
     """
-    Compute ensemble CRPS for one single-lead forecast file.
+    Compute fair CRPS for one single-lead forecast file.
+
+    If record_threshold and tail are supplied, compute fair rtwCRPS instead.
+    Existing calls without those arguments are unchanged.
 
     Returns:
         CRPS with dimensions
@@ -191,7 +249,16 @@ def ENS_CRPS_landseasep(
         lead_hour = int(td)
     lead_delta = np.timedelta64(lead_hour, "h")
 
-    print(f"    CRPS lead {lead_hour:03d}h")
+    if record_threshold is None:
+        score_name = "CRPS"
+        print(f"    fair CRPS lead {lead_hour:03d}h")
+    else:
+        if tail not in {"max", "min"}:
+            raise ValueError(
+                "tail must be 'max' or 'min' when record_threshold is supplied."
+            )
+        score_name = "rtwCRPS"
+        print(f"    fair rtwCRPS ({tail}) lead {lead_hour:03d}h")
 
     CRPS = xr.DataArray(
         np.full(
@@ -205,7 +272,7 @@ def ENS_CRPS_landseasep(
             landsea=functions.LANDSEA_NAMES,
         ),
         dims=["leadtime", "season", "landsea"],
-        name="CRPS",
+        name=score_name,
     )
 
     stat = xr.DataArray(
@@ -268,18 +335,50 @@ def ENS_CRPS_landseasep(
         method="nearest",
     )
 
-    forecast_sub, truth_sub, mask_sub = xr.align(
-        forecast_sub,
-        truth_sub,
-        mask_sub,
-        join="inner",
-    )
+    if record_threshold is None:
+        forecast_sub, truth_sub, mask_sub = xr.align(
+            forecast_sub,
+            truth_sub,
+            mask_sub,
+            join="inner",
+        )
 
-    # Compute CRPS field lazily.
-    crps_field = ensemble_crps_sorted(
-        forecast_sub,
-        truth_sub,
-    )
+        # Compute fair CRPS field lazily.
+        crps_field = ensemble_crps_sorted(
+            forecast_sub,
+            truth_sub,
+        )
+    else:
+        month_indexer = xr.DataArray(
+            forecast_sub["time"].dt.month.values,
+            dims="time",
+            coords={"time": forecast_sub["time"].values},
+        )
+        record_sub = record_threshold.sel(month=month_indexer)
+        if "month" in record_sub.coords:
+            record_sub = record_sub.drop_vars("month")
+        record_sub = functions.normalize_spatial_coords(record_sub)
+        record_sub = record_sub.reindex(
+            latitude=forecast_sub["latitude"],
+            longitude=forecast_sub["longitude"],
+            method="nearest",
+        )
+
+        forecast_sub, truth_sub, mask_sub, record_sub = xr.align(
+            forecast_sub,
+            truth_sub,
+            mask_sub,
+            record_sub,
+            join="inner",
+        )
+
+        # Compute fair rtwCRPS field lazily.
+        crps_field = record_threshold_weighted_crps_sorted(
+            forecast_sub,
+            truth_sub,
+            record_sub,
+            tail=tail,
+        )
 
     # Reduce the CRPS field to small scalar summaries.
     scalar_tasks = []
@@ -318,5 +417,7 @@ def ENS_CRPS_landseasep(
         stat[i, j, k, 0] = size_val
         stat[i, j, k, 1] = mean_val
         stat[i, j, k, 2] = var_val
+
+    CRPS.attrs.update(crps_field.attrs)
 
     return CRPS, stat
