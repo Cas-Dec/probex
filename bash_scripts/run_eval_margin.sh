@@ -5,7 +5,7 @@ MODEL="${1:-GenCast}"
 VAR="${2:-t2m}"
 YEAR="${3:-2020}"
 TRUTH="${4:-ERA5}"
-RECORD_TAG="${5:-1979_2018}"
+RECORD_TAG="${5:-1979_2021}"
 MARGIN_MAX="${6:-6.0}"
 MARGIN_STEP="${7:-0.25}"
 

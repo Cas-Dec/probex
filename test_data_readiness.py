@@ -134,7 +134,7 @@ def test_truth_data(year: int) -> bool:
     return all_ok
 
 
-def test_era5_records(record_tag: str = "1979_2018") -> bool:
+def test_era5_records(record_tag: str = "1979_2021") -> bool:
     """Test that ERA5 record files exist."""
     print("\n" + "="*60)
     print("TESTING ERA5 RECORD FILES")
@@ -323,7 +323,7 @@ def test_single_forecast_load(year: int) -> bool:
 def main():
     parser = argparse.ArgumentParser(description="Test data readiness for evaluation")
     parser.add_argument("--year", type=int, default=2022, help="Year to test")
-    parser.add_argument("--record-tag", type=str, default="1979_2018", help="ERA5 record tag")
+    parser.add_argument("--record-tag", type=str, default="1979_2021", help="ERA5 record tag")
     parser.add_argument("--quick", action="store_true", help="Quick mode: only test first lead of each model")
     args = parser.parse_args()
 

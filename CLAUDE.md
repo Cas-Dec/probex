@@ -61,10 +61,10 @@ qsub -t 1 job_scripts/submit_eval_crps.pbs   # run only task 1 (GenCast t2m)
 **Running locally (via bash scripts):**
 
 ```bash
-bash bash_scripts/run_eval_crps.sh GenCast t2m 2020 ERA5 1979_2018
-bash bash_scripts/run_eval_point.sh GenCast t2m 2020 ERA5 1979_2018
-bash bash_scripts/run_eval_occurrence.sh IFS_ENS w10 2020 ERA5 1979_2018
-bash bash_scripts/run_eval_margin.sh GenCast t2m 2020 ERA5 1979_2018 6.0 0.25
+bash bash_scripts/run_eval_crps.sh GenCast t2m 2020 ERA5 1979_2021
+bash bash_scripts/run_eval_point.sh GenCast t2m 2020 ERA5 1979_2021
+bash bash_scripts/run_eval_occurrence.sh IFS_ENS w10 2020 ERA5 1979_2021
+bash bash_scripts/run_eval_margin.sh GenCast t2m 2020 ERA5 1979_2021 6.0 0.25
 ```
 
 **Running eval scripts directly (for debugging):**

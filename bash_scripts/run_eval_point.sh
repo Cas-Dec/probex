@@ -5,7 +5,7 @@ MODEL="${1:-GenCast}"
 VAR="${2:-t2m}"
 YEAR="${3:-2020}"
 TRUTH="${4:-ERA5}"
-RECORD_TAG="${5:-1979_2018}"
+RECORD_TAG="${5:-1979_2021}"
 
 PROJECT_ROOT="${PBS_O_WORKDIR:-$(pwd)}"
 if [[ ! -f "${PROJECT_ROOT}/find_probex_env.sh" && -f "${PROJECT_ROOT}/../find_probex_env.sh" ]]; then

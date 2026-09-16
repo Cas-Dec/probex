@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-RECORD_TAG="${1:-1979_2018}"
+RECORD_TAG="${1:-1979_2021}"
 START_YEAR="${2:-1979}"
-END_YEAR="${3:-2018}"
+END_YEAR="${3:-2021}"
 HOURS="${4:-0,12}"
 
 PROJECT_ROOT="${PBS_O_WORKDIR:-$(pwd)}"
@@ -28,6 +28,7 @@ date
 hostname
 
 "${PROBEX_PYTHON}" -u download/create_era5_records.py \
+  --out-root "${RECORDS_ROOT:-${ERA5_ROOT:-data/wb2}}" \
   --record-tag "${RECORD_TAG}" \
   --start-year "${START_YEAR}" \
   --end-year "${END_YEAR}" \

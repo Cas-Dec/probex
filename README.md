@@ -1,7 +1,7 @@
 
 # probex: Probabilistic Ensemble Forecast Evaluation On Extremes
 
-Evaluates probabilistic ensemble weather forecasts (IFS_ENS, FGN, ArchesWeatherGen and UCast, GenCast) against verification data (ERA5, HRES-fc0) with a focus on record-breaking extremes. Computes CRPS, deterministic point scores, probabilistic occurrence/reliability metrics, and margin-conditioned scores at 1.5° resolution.
+Evaluates probabilistic ensemble weather forecasts (IFS_ENS, FGN, ArchesWeatherGen and UCast, GenCast) against verification data (ERA5, HRES-fc0) with a focus on record-breaking extremes. Computes fair CRPS, fair record-threshold weighted CRPS, fair Brier scores, probabilistic occurrence/reliability metrics, deterministic point scores, and margin-conditioned scores at 1.5° resolution.
 
 ## Installation & Environment Setup
 
@@ -64,7 +64,7 @@ If your conda installation uses a different location, manually edit the search p
 This workflow downloads and evaluates 4 models (IFS_ENS, FGN, uCast, ArchesWeatherGen) for year 2022 with lead times {12, 48, 120, 168, 240}h and variables t2m (min/max) and w10 (max).
 
 ### Step 1: Generate ERA5 Monthly Records
-One-time setup: creates monthly climatological extrema from ERA5 (1979–2018).
+One-time setup: creates monthly climatological extrema from ERA5 (1979–2021), using 00 and 12 UTC verification times.
 
 ```bash
 qsub job_scripts/submit_create_era5_records.pbs
@@ -126,6 +126,9 @@ qsub job_scripts/submit_eval_margin_all.pbs
 
 Results saved to `results/{model}/{METRIC}/`.
 
+For backward compatibility, the occurrence output variable remains named
+`brier_score`, but it contains Ferro's fair finite-ensemble estimator.
+
 ## Running Scripts Locally (for Debugging & Quick Tests)
 
 All scripts in `bash_scripts/` can be run directly without PBS for development, testing, and debugging:
@@ -133,7 +136,7 @@ All scripts in `bash_scripts/` can be run directly without PBS for development, 
 ```bash
 # Generate ERA5 records
 bash bash_scripts/run_create_era5_records.sh [record_tag] [start_year] [end_year] [hours]
-bash bash_scripts/run_create_era5_records.sh 1979_2018 1979 2018 0,12  # default
+bash bash_scripts/run_create_era5_records.sh 1979_2021 1979 2021 0,12  # default
 
 # Download data
 bash bash_scripts/run_download_era5_wb2.sh [variable]
@@ -153,18 +156,18 @@ bash bash_scripts/run_eval_margin.sh [model] [variable] [year] [truth] [record_t
 
 **Examples:**
 ```bash
-# Create records for full 1979-2018 baseline
-bash bash_scripts/run_create_era5_records.sh 1979_2018 1979 2018 0,12
+# Create records for full 1979-2021 baseline
+bash bash_scripts/run_create_era5_records.sh 1979_2021 1979 2021 0,12
 
 # Download t2m data
 bash bash_scripts/run_download_era5_wb2.sh 2m_temperature
 bash bash_scripts/run_download_ifs_ens_wb2.sh 2m_temperature 12
 
 # Evaluate IFS_ENS t2m CRPS for 2022 vs ERA5
-bash bash_scripts/run_eval_crps.sh IFS_ENS t2m 2022 ERA5 1979_2018
+bash bash_scripts/run_eval_crps.sh IFS_ENS t2m 2022 ERA5 1979_2021
 
 # Test FGN w10 point scores
-bash bash_scripts/run_eval_point.sh FGN w10 2022 ERA5 1979_2018
+bash bash_scripts/run_eval_point.sh FGN w10 2022 ERA5 1979_2021
 ```
 
 Scripts automatically log to `logs/` and save results to `results/{model}/{metric}/`.
@@ -204,8 +207,8 @@ python -u eval/forecast_evaluation_margin.py --year 2022 --var t2m --model FGN -
 /data/gent/vo/000/gvo00090/HEAT/Data/
 ├── wb2/
 │   ├── 1959-2023_01_10-6h-240x121_equiangular_with_poles_conservative.zarr  (ERA5 truth)
-│   ├── ERA5_record_max_month_1979_2018_{t2m,w10}.nc  (Monthly max extrema)
-│   ├── ERA5_record_min_month_1979_2018_t2m.nc  (Monthly min extrema, t2m only)
+│   ├── ERA5_record_max_month_1979_2021_{t2m,w10}.nc  (Monthly max extrema)
+│   ├── ERA5_record_min_month_1979_2021_t2m.nc  (Monthly min extrema, t2m only)
 │   └── ERA5_lsm_sfc.nc  (Land-sea mask)
 │
 ├── forecasts/

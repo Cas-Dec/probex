@@ -41,11 +41,16 @@ def ensemble_crps_sorted(
     truth: xr.DataArray,
 ) -> xr.DataArray:
     """
-    FAIR ensemble CRPS using the sorted-member formula.
+    Fair ensemble CRPS using the sorted-member formula.
 
     For ensemble members x_1,...,x_M and observation y,
-        fair CRPS = 1/M sum_m |x_m - y|- 1/[M(M-1)] sum_m (2m - M - 1) x_(m),
-    where x_(m) are the sorted ensemble members. See Ferro (2014)
+
+        fair CRPS = 1/M sum_m |x_m - y|
+                    - 1/[M(M-1)] sum_m (2m - M - 1) x_(m),
+
+    where x_(m) are the sorted ensemble members. This is the finite-ensemble
+    correction of Ferro (2014). The function name and return structure are
+    unchanged so existing evaluation scripts automatically use fair CRPS.
     """
 
     forecast, truth = xr.align(forecast, truth, join="inner")
@@ -104,9 +109,9 @@ def ensemble_crps_sorted(
 
     return crps
 
-# =====================================
+# =============================================================================
 # Record-threshold weighted CRPS
-# =====================================
+# =============================================================================
 
 def record_threshold_weighted_crps_sorted(
     forecast: xr.DataArray,
@@ -115,9 +120,14 @@ def record_threshold_weighted_crps_sorted(
     tail: str,
 ) -> xr.DataArray:
     """
-    (fair) Threshold-weighted CRPS for a record threshold.
-    For upper records (heat and wind),v_r(z) = max(z, r).
-    whereas for lower records (cold), use v_r(z) = min(z, r).
+    Fair threshold-weighted CRPS for a record threshold.
+
+    For upper records (heat and wind), use v_r(z) = max(z, r).
+    For lower records (cold), use v_r(z) = min(z, r).
+
+    Averaging this score over all verification cases evaluates both record
+    probability and magnitude beyond the record without conditioning on the
+    observed outcome.
     """
 
     if tail not in {"max", "min"}:
@@ -159,9 +169,9 @@ def record_threshold_weighted_crps_sorted(
 
     return rtwcrps
 
-# ================================
+# =============================================================================
 # Weighted CRPS summaries
-# ================================
+# =============================================================================
 
 def weighted_stats(
     field: xr.DataArray,

@@ -46,7 +46,7 @@ parser.add_argument("--year", type=int, default=2020, choices=[2018, 2020, 2022]
 parser.add_argument("--var", type=str, default="t2m", choices=["t2m", "w10"])
 parser.add_argument("--model", type=str, default="GenCast", choices=["GenCast", "IFS_ENS", "ArchesWeatherGen", "uCast", "FGN"])
 parser.add_argument("--truth", type=str, default="ERA5", choices=["ERA5", "HRES_fc0"])
-parser.add_argument("--record-tag", type=str, default="1979_2018")
+parser.add_argument("--record-tag", type=str, default="1979_2021")
 args = parser.parse_args()
 
 
@@ -223,6 +223,8 @@ for case in cases:
     ds.attrs["verification_target"] = truth_name
     ds.attrs["record_tag"] = record_tag
     ds.attrs["domain"] = "no_Antarctic"
+    ds.attrs["brier_estimator"] = "fair ensemble Brier score"
+    ds.attrs["brier_reference"] = "Ferro (2014), doi:10.1002/qj.2270"
 
     if var == "t2m" and case == "max":
         ds.attrs["event"] = "heat"

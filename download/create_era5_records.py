@@ -81,11 +81,25 @@ parser.add_argument("--hours", type=str, default="0,12",
                     help="Comma-separated UTC hours used for climatology, e.g. '0,12'.")
 args = parser.parse_args()
 
+if args.start_year > args.end_year:
+    raise ValueError("start-year must not be later than end-year.")
+
+expected_record_tag = f"{args.start_year}_{args.end_year}"
+if args.record_tag != expected_record_tag:
+    raise ValueError(
+        f"record-tag is '{args.record_tag}', but the requested years imply "
+        f"'{expected_record_tag}'. Use matching values to avoid mislabelled records."
+    )
+
 era5_zarr = Path(args.era5_zarr)
 out_root = Path(args.out_root)
 out_root.mkdir(parents=True, exist_ok=True)
 
 hours = _parse_hours(args.hours)
+if not hours:
+    raise ValueError("At least one verification hour must be supplied.")
+if any(hour < 0 or hour > 23 for hour in hours):
+    raise ValueError("Verification hours must lie between 0 and 23 UTC.")
 time_start = f"{args.start_year}-01-01"
 time_end = f"{args.end_year}-12-31T23:59:59"
 
@@ -101,6 +115,33 @@ print(f"Hours (UTC) : {hours}")
 print("\nOpening ERA5 store...")
 ds = xr.open_zarr(era5_zarr, chunks={})
 
+available_years = np.unique(ds["time"].dt.year.values).astype(int)
+missing_years = np.setdiff1d(
+    np.arange(args.start_year, args.end_year + 1),
+    available_years,
+)
+if missing_years.size:
+    raise ValueError(
+        "ERA5 source does not contain all requested record years. Missing: "
+        + ", ".join(str(year) for year in missing_years)
+    )
+
+available_hours = np.unique(ds["time"].dt.hour.values).astype(int)
+missing_hours = np.setdiff1d(np.asarray(hours), available_hours)
+if missing_hours.size:
+    raise ValueError(
+        "ERA5 source does not contain all requested UTC hours. Missing: "
+        + ", ".join(str(hour) for hour in missing_hours)
+    )
+
+record_attrs = {
+    "record_tag": args.record_tag,
+    "record_start_year": args.start_year,
+    "record_end_year": args.end_year,
+    "record_hours_utc": ",".join(str(hour) for hour in hours),
+    "source": str(era5_zarr),
+}
+
 for var_short, var_long in VARIABLES.items():
     print(f"\nProcessing {var_short} ({var_long})...")
 
@@ -115,6 +156,7 @@ for var_short, var_long in VARIABLES.items():
     rec_max = rec_max.rename({"latitude": "lat", "longitude": "lon"})
     rec_max_file = out_root / f"ERA5_record_max_month_{args.record_tag}_{var_short}.nc"
     rec_max.name = f"ERA5_record_max_month_{args.record_tag}_{var_short}"
+    rec_max.attrs.update(record_attrs)
     rec_max.to_netcdf(rec_max_file)
     print(f"  Wrote {rec_max_file}")
 
@@ -123,6 +165,7 @@ for var_short, var_long in VARIABLES.items():
         rec_min = rec_min.rename({"latitude": "lat", "longitude": "lon"})
         rec_min_file = out_root / f"ERA5_record_min_month_{args.record_tag}_{var_short}.nc"
         rec_min.name = f"ERA5_record_min_month_{args.record_tag}_{var_short}"
+        rec_min.attrs.update(record_attrs)
         rec_min.to_netcdf(rec_min_file)
         print(f"  Wrote {rec_min_file}")
 

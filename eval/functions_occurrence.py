@@ -88,6 +88,7 @@ def record_by_time(record: xr.DataArray, valid_times) -> xr.DataArray:
 def weighted_occurrence_stats(
     p: xr.DataArray,
     y: xr.DataArray,
+    member_count: xr.DataArray,
     land_sea_mask: xr.DataArray,
     landsea: str,
 ):
@@ -97,13 +98,14 @@ def weighted_occurrence_stats(
     Returns:
         observed_count
         expected_count
-        brier_score
+        brier_score (fair finite-ensemble estimator)
     """
 
-    p, y = xr.align(p, y, join="inner")
+    p, y, member_count = xr.align(p, y, member_count, join="inner")
 
     p = p.astype("float32")
     y = y.astype("float32")
+    member_count = member_count.astype("float32")
 
     land_sea_mask = land_sea_mask.reindex(
         latitude=p["latitude"],
@@ -111,7 +113,7 @@ def weighted_occurrence_stats(
         method="nearest",
     )
 
-    valid = p.notnull() & y.notnull()
+    valid = p.notnull() & y.notnull() & (member_count >= 2)
 
     if landsea == "land":
         valid = valid & (land_sea_mask > 0.5)
@@ -128,7 +130,13 @@ def weighted_occurrence_stats(
 
     denom = weights.where(valid).sum(dim=dims)
 
-    brier_score = (((p - y) ** 2) * weights).where(valid).sum(dim=dims) / denom
+    # Ferro's finite-ensemble correction. The output name is deliberately
+    # unchanged so existing plotting code continues to work.
+    brier_field = (
+        (p - y) ** 2
+        - p * (1.0 - p) / (member_count - 1.0)
+    )
+    brier_score = (brier_field * weights).where(valid).sum(dim=dims) / denom
 
     return observed_count, expected_count, brier_score
 
@@ -350,6 +358,11 @@ def empty_occurrence_result(lead_hour: int) -> xr.Dataset:
         reliability_bin_right=("reliability_bin", RELIABILITY_BINS[1:]),
     )
 
+    ds["brier_score"].attrs["estimator"] = "fair ensemble Brier score"
+    ds["brier_score"].attrs["reference"] = (
+        "Ferro (2014), doi:10.1002/qj.2270"
+    )
+
     return ds
 
 
@@ -452,6 +465,7 @@ def evaluate_occurrence_one_lead(
     )
 
     valid_record = record_sub.notnull()
+    member_count = fc.notnull().sum("number")
 
     if tail == "max":
         y = (truth_sub > record_sub).where(valid_record & truth_sub.notnull())
@@ -469,12 +483,14 @@ def evaluate_occurrence_one_lead(
 
         p_season = functions.select_months(p, months)
         y_season = functions.select_months(y, months)
+        member_count_season = functions.select_months(member_count, months)
 
         for k, landsea in enumerate(functions.LANDSEA_NAMES):
 
             observed_count, expected_count, brier_score = weighted_occurrence_stats(
                 p_season,
                 y_season,
+                member_count_season,
                 land_sea_mask,
                 landsea,
             )

@@ -97,7 +97,7 @@ echo ""
 echo "ERA5 Records:"
 echo "------------------------------------------"
 RECORDS_DIR="data/era5_records"
-RECORD_COUNT=$(find ${RECORDS_DIR}/ERA5_record_*_1979_2018_*.nc -type f 2>/dev/null | wc -l)
+RECORD_COUNT=$(find ${RECORDS_DIR}/ERA5_record_*_1979_2021_*.nc -type f 2>/dev/null | wc -l)
 echo "  Found: ${RECORD_COUNT}/5 files (expected: max/min for t2m, max for w10, plus LSM)"
 if [ $RECORD_COUNT -ge 5 ]; then
     echo "  ✓ Complete"

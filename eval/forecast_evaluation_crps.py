@@ -49,7 +49,7 @@ parser.add_argument("--year", type=int, default=2020, choices=[2018, 2020, 2022]
 parser.add_argument("--var", type=str, default="t2m", choices=["t2m", "w10"])
 parser.add_argument("--model", type=str, default="GenCast", choices=["GenCast", "IFS_ENS", "ArchesWeatherGen", "uCast", "FGN"])
 parser.add_argument("--truth", type=str, default="ERA5", choices=["ERA5", "HRES_fc0"])
-parser.add_argument("--record-tag", type=str, default="1979_2018")
+parser.add_argument("--record-tag", type=str, default="1979_2021")
 args = parser.parse_args()
 
 
@@ -173,6 +173,7 @@ if var == "t2m":
 rtwcrps_by_case = {case: [] for case in rtw_cases}
 rtwstat_by_case = {case: [] for case in rtw_cases}
 
+# until here everything works perfectly.
 for i, lead_hour in enumerate(leads, start=1):
     forecast_file = (
         forecast_root / model
@@ -195,7 +196,7 @@ for i, lead_hour in enumerate(leads, start=1):
         lsm, # separate scores for land and sea and all
         eval_start,
         eval_end,
-    )
+    ) # what are crps and stat?
 
     crps_by_case["max"].append(crps) # sel by leadtime, season, landsea
     stat_by_case["max"].append(stat) # size (# valid grid-time events), mean crps, variance of the crps (before averaging)
