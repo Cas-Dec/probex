@@ -1,7 +1,7 @@
 
 # probex: Probabilistic Ensemble Forecast Evaluation On Extremes
 
-Evaluates probabilistic ensemble weather forecasts (IFS_ENS, FGN, ArchesWeatherGen and UCast, GenCast) against verification data (ERA5, HRES-fc0) with a focus on record-breaking extremes. Computes fair CRPS, fair record-threshold weighted CRPS, fair Brier scores, probabilistic occurrence/reliability metrics, deterministic point scores, and margin-conditioned scores at 1.5° resolution.
+Evaluates probabilistic ensemble weather forecasts (IFS_ENS, FGN, ArchesWeatherGen, uCast) against verification data (ERA5, HRES-fc0) with a focus on record-breaking extremes. Computes fair CRPS, fair record-threshold weighted CRPS, fair Brier scores, probabilistic occurrence/reliability metrics, deterministic point scores, and margin-conditioned scores at 1.5° resolution.
 
 ## Installation & Environment Setup
 
@@ -17,17 +17,35 @@ conda activate probex
 ```
 
 ### 3. Configure data paths (`.env` file)
-All data paths are centralized in the `.env` file. Verify the paths match your system:
+All data paths are centralized in the `.env` file. The file is already configured for the default HPC environment. Verify paths match your system:
 
 ```bash
 cat .env
 ```
 
-Key paths:
-- `FORECAST_ROOT=/data/gent/vo/000/gvo00090/HEAT/Data/forecasts` — Forecast model outputs
-- `ERA5_ROOT=/data/gent/vo/000/gvo00090/HEAT/Data/wb2` — ERA5 and HRES-fc0 truth data
-- `RECORDS_ROOT=/data/gent/vo/000/gvo00090/HEAT/Data/wb2` — Monthly climatological records and land-sea mask
-- `ERA5_TRUTH_ZARR=/data/.../1959-2023_01_10-6h-240x121_equiangular_with_poles_conservative.zarr` — ERA5 Zarr store
+**Example `.env` file:**
+```bash
+HEAT_DATA=/data/gent/vo/000/gvo00090/HEAT/Data
+FORECAST_ROOT=/data/gent/vo/000/gvo00090/HEAT/Data/forecasts
+ERA5_ROOT=/data/gent/vo/000/gvo00090/HEAT/Data/wb2
+ERA5_TRUTH_ZARR=/data/gent/vo/000/gvo00090/HEAT/Data/wb2/1959-2023_01_10-6h-240x121_equiangular_with_poles_conservative.zarr
+RECORDS_ROOT=/data/gent/vo/000/gvo00090/HEAT/Data/wb2
+
+IFS_ENS_OUT_ROOT=/data/gent/vo/000/gvo00090/HEAT/Data/forecasts/IFS_ENS
+FGN_OUT_ROOT=/data/gent/vo/000/gvo00090/HEAT/Data/forecasts/FGN
+HRES_FC0_OUT_ROOT=/data/gent/vo/000/gvo00090/HEAT/Data/forecasts/HRES_fc0
+
+UCAST_FORECASTS_2022=/data/gent/vo/000/gvo00090/HEAT/Data/forecasts/ucast_forecasts_2022.zarr
+ARCHESWEATHERGEN_FORECASTS_2022=/data/gent/vo/000/gvo00090/HEAT/Data/forecasts/archesweathergen_forecasts_2022.zarr
+```
+
+**Key paths:**
+- `FORECAST_ROOT` — Root directory for all forecast model outputs (per-lead files)
+- `ERA5_ROOT` — ERA5 and HRES-fc0 truth data
+- `ERA5_TRUTH_ZARR` — ERA5 Zarr store (shared data, all years 1959–2023)
+- `RECORDS_ROOT` — Monthly climatological records (NetCDF) and land-sea mask
+- `IFS_ENS_OUT_ROOT`, `FGN_OUT_ROOT`, `HRES_FC0_OUT_ROOT` — Download destinations for each model
+- `UCAST_FORECASTS_*`, `ARCHESWEATHERGEN_FORECASTS_*` — Combined source Zarr locations (used only during conversion)
 
 ### 4. Fix line endings (if scripts were edited on Windows)
 ```bash
@@ -61,7 +79,7 @@ If your conda installation uses a different location, manually edit the search p
 
 ## Quick Start: Running a 2022 Analysis
 
-This workflow downloads and evaluates 4 models (IFS_ENS, FGN, uCast, ArchesWeatherGen) for year 2022 with lead times {12, 48, 120, 168, 240}h and variables t2m (min/max) and w10 (max).
+This workflow downloads and evaluates 4 models (IFS_ENS, FGN, uCast, ArchesWeatherGen) for year 2022. Lead times: IFS_ENS/FGN/uCast [12, 48, 120, 168, 240]h; ArchesWeatherGen [48, 120, 168, 240]h (12h unavailable). Variables: t2m and w10.
 
 ### Step 1: Generate ERA5 Monthly Records
 One-time setup: creates monthly climatological extrema from ERA5 (1979–2021), using 00 and 12 UTC verification times.
@@ -73,28 +91,42 @@ qsub job_scripts/submit_create_era5_records.pbs
 ### Step 2: Download WeatherBench 2 Data
 Download forecast and truth data for 2022.
 
+**ERA5 & HRES_fc0 (Truth Data):**
 ```bash
-# ERA5 and HRES GT data
 qsub job_scripts/submit_download_era5_wb2.pbs
 qsub job_scripts/submit_download_hres_fc0_wb2.pbs
-
-# UCast and ArchesWeatherGen forecasts for 2022
-qsub job_scripts/submit_download_ucast.pbs # TODO create
-qsub job_scripts/submit_download_archesweathergen.pbs # TODO create
-
-# IFS_ENS ensemble forecasts (array job: 2 vars × 5 leads)
-qsub job_scripts/submit_download_ifs_ens_wb2.pbs
-
-# FGN ensemble forecasts (array job: 2 vars × 5 leads)
-qsub job_scripts/submit_download_fgn_wb2.pbs
 ```
 
-### Step 3: Convert Combined-Source Forecasts
-uCast and ArchesWeatherGen are stored as combined Zarrs; split into per-lead files for evaluation:
+**IFS_ENS & FGN (Ensemble Forecasts from WeatherBench 2):**
+```bash
+qsub job_scripts/submit_download_ifs_ens_wb2.pbs  # Array job: 2 vars × 5 leads
+qsub job_scripts/submit_download_fgn_wb2.pbs     # Array job: 2 vars × 5 leads
+```
+
+**uCast (Combined Source Zarr):**
+TODO: ADD INSTRUCTIONS
+- Source: WeatherBench 2
+- Output format: `ucast_forecasts_{year}.zarr` (combined all lead times)
+- Variables: 2m_temperature, 10m_wind_speed
+- Lead times: [12, 48, 120, 168, 240]h
+- Ensemble members: 64
+- Expected location: `/data/gent/vo/000/gvo00090/HEAT/Data/forecasts/`
+
+**ArchesWeatherGen (Combined Source Zarr):**
+TODO: ADD INSTRUCTIONS
+- Source: WeatherBench 2
+- Output format: `archesweathergen_forecasts_{year}.zarr` (combined all lead times)
+- Variables: 2m_temperature, 10m_wind_speed
+- Lead times: [48, 120, 168, 240]h (12h not available)
+- Ensemble members: 64
+- Expected location: `/data/gent/vo/000/gvo00090/HEAT/Data/forecasts/`
+
+### Step 3: Convert Combined-Source Forecasts to Per-Lead Format
+uCast and ArchesWeatherGen are downloaded as combined Zarr stores (one per year, all lead times merged). These must be converted to per-lead files for evaluation:
 
 ```bash
-bash bash_scripts/run_convert_ucast_wb2.sh
-bash bash_scripts/run_convert_arches_wb2.sh
+bash bash_scripts/run_convert_ucast_wb2.sh [year]
+bash bash_scripts/run_convert_arches_wb2.sh [year]
 ```
 
 Or via PBS for batch processing:
@@ -103,7 +135,13 @@ qsub job_scripts/submit_convert_ucast_wb2.pbs
 qsub job_scripts/submit_convert_arches_wb2.pbs
 ```
 
-**Lead-time coverage:**
+**Why conversion?** The evaluation pipeline loads one lead at a time from separate per-lead Zarr files (matching the structure of IFS_ENS and FGN). The conversion scripts:
+1. Read the combined source (`ucast_forecasts_{year}.zarr` or `archesweathergen_forecasts_{year}.zarr`)
+2. Extract each lead time separately
+3. Rename dimensions and coordinates to match evaluation expectations
+4. Save as individual per-lead files (e.g., `uCast_2022_no_Antarctic_t2m_m64_1p50_lead_012h.zarr`)
+
+**Lead-time coverage (per-lead files):**
 - **uCast**: [12, 48, 120, 168, 240]h ✓
 - **ArchesWeatherGen**: [48, 120, 168, 240]h (12h not available; runs on 24h steps)
 
@@ -125,6 +163,8 @@ qsub job_scripts/submit_eval_margin_all.pbs
 ```
 
 Results saved to `results/{model}/{METRIC}/`.
+
+**Important**: IFS_ENS is verified against HRES_fc0 deterministic forecasts (not ERA5), while other models (uCast, ArchesWeatherGen, FGN) are verified against ERA5. This is automatic—no configuration needed.
 
 For backward compatibility, the occurrence output variable remains named
 `brier_score`, but it contains Ferro's fair finite-ensemble estimator.
@@ -215,15 +255,15 @@ python -u eval/forecast_evaluation_margin.py --year 2022 --var t2m --model FGN -
 │   ├── HRES_fc0/
 │   │   └── HRES_fc0_{year}_no_Antarctic_{var}_1p50.zarr  (Deterministic reference)
 │   ├── IFS_ENS/
-│   │   └── IFS_ENS_{year}_no_Antarctic_{var}_m50_1p50_lead_{LLL}h.zarr
+│   │   └── IFS_ENS_{year}_no_Antarctic_{var}_m50_1p50_lead_{LLL}h.zarr  (Per-lead files)
 │   ├── FGN/
-│   │   └── FGN_{year}_no_Antarctic_{var}_m64_1p50_lead_{LLL}h.zarr
+│   │   └── FGN_{year}_no_Antarctic_{var}_m64_1p50_lead_{LLL}h.zarr  (Per-lead files)
 │   ├── uCast/
-│   │   └── uCast_{year}_no_Antarctic_{var}_m64_1p50_lead_{LLL}h.zarr  (Converted)
+│   │   └── uCast_{year}_no_Antarctic_{var}_m64_1p50_lead_{LLL}h.zarr  (Per-lead files)
 │   ├── ArchesWeatherGen/
-│   │   └── ArchesWeatherGen_{year}_no_Antarctic_{var}_m64_1p50_lead_{LLL}h.zarr  (Converted)
-│   ├── ucast_forecasts_{year}.zarr  (Combined source)
-│   └── archesweathergen_forecasts_{year}.zarr  (Combined source)
+│   │   └── ArchesWeatherGen_{year}_no_Antarctic_{var}_m64_1p50_lead_{LLL}h.zarr  (Per-lead files)
+│   ├── ucast_forecasts_{year}.zarr  (Combined source — used ONLY for conversion)
+│   └── archesweathergen_forecasts_{year}.zarr  (Combined source — used ONLY for conversion)
 │
 results/
 ├── {model}/
@@ -233,12 +273,45 @@ results/
 │   └── Margin/
 ```
 
+### Clarification: Combined vs Per-Lead Data
+
+- **Per-lead files** (in `uCast/`, `ArchesWeatherGen/`, `IFS_ENS/`, `FGN/` folders): 
+  - Separate Zarr file for each lead time (e.g., `uCast_2022_no_Antarctic_t2m_m64_1p50_lead_012h.zarr`)
+  - **Used directly by evaluation scripts** ← Required
+  - All 4 models use this format for evaluation
+
+- **Combined sources** (`ucast_forecasts_{year}.zarr`, `archesweathergen_forecasts_{year}.zarr`):
+  - Single Zarr store per year with all lead times merged
+  - **Intermediate data only** — downloaded once, converted once, then can be deleted
+  - Used **only** by conversion scripts (`convert_ucast_wb2.py`, `convert_arches_wb2.py`)
+  - **Safe to delete after conversion completes successfully** — not needed for evaluation
+  
+**Disk management**: After running conversion scripts, you can free substantial disk space by removing the combined source Zarrs, keeping only the per-lead files in the model folders.
+
 ## Important Notes
 
-- **Debug flags**: All evaluation scripts contain hardcoded debug restrictions (e.g., `leads = [24]`, `n_members = 1`). Remove these before production runs.
+### Model Configuration
+Valid model names and their properties:
+| Model | Lead times | Ensemble size | Truth data |
+|-------|-----------|---------------|-----------|
+| IFS_ENS | [12, 48, 120, 168, 240]h | 50 | HRES_fc0 |
+| FGN | [12, 48, 120, 168, 240]h | 64 | ERA5 |
+| uCast | [12, 48, 120, 168, 240]h | 64 | ERA5 |
+| ArchesWeatherGen | [48, 120, 168, 240]h | 64 | ERA5 |
+| HRES_fc0 | all valid times | — (deterministic) | — (is the truth) |
+
+### Parameters
+- **`record_tag`**: Tag for ERA5 record climatology baseline (e.g., `1979_2021`). 
+  - Default: `1979_2021` (recommended for most analyses)
+  - Create new records via: `bash bash_scripts/run_create_era5_records.sh <tag> <start_year> <end_year> <hours>`
+  - Each tag produces independent record sets; useful for sensitivity analysis
 - **Evaluation cases**: "max" (record-breaking highs), "min" (record-breaking lows, t2m only), "all" (no record filter).
 - **Coordinate conventions**: Longitude normalized to ±180°, latitude sorted south-to-north.
-- **Memory management**: Forecasts are deleted after each lead time to free memory for large dask operations.
+
+### Memory & Performance
+- **Dask chunking**: Forecasts chunked as `{time: 31, number: -1, latitude: 30, longitude: 60}` for memory efficiency.
+- **Per-lead processing**: Each lead time is processed, computed, and deleted separately to minimize peak memory usage.
+- **Data format**: All data uses Zarr format with conservative gridding (accounts for poles correctly).
 
 ## Troubleshooting
 
@@ -255,8 +328,6 @@ If evaluation scripts fail with `ValueError: cannot reindex or align along dimen
 - Issue: Forecast or truth data has duplicate longitude values in the coordinate
 - Likely cause: Coordinate normalization (±180°, south-to-north latitude) not applied correctly
 - Solution: Check [functions.py](eval/functions.py) for coordinate validation and normalization logic
-
-
 
 ### Running out of memory during large evaluations
 Solutions:
