@@ -3,8 +3,8 @@ set -euo pipefail
 
 VARIABLE="${1:-2m_temperature}"
 
-# run from directory from which we submitted
-cd "${PBS_O_WORKDIR}"
+PROJECT_ROOT="${PBS_O_WORKDIR:-$(pwd)}"
+cd "${PROJECT_ROOT}"
 
 if [[ -f .env ]]; then
   set -a

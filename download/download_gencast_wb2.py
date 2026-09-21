@@ -7,6 +7,11 @@ Download a Gencast chunk (single lead, for initializations 00 and 12,all ensembl
 from __future__ import annotations
 import argparse
 import os
+
+# Force gRPC's native DNS resolver: the default c-ares resolver tries IPv6 first
+# and times out on this cluster's IPv4-only network, breaking gs:// access.
+os.environ.setdefault("GRPC_DNS_RESOLVER", "native")
+
 from pathlib import Path
 import xarray as xr
 

@@ -39,8 +39,8 @@ if (( ${#POSITIONAL_ARGS[@]} > 1 )); then
   LEAD_HOUR="${POSITIONAL_ARGS[1]}"
 fi
 
-# run from directory from which we submitted
-cd "${PBS_O_WORKDIR}"
+PROJECT_ROOT="${PBS_O_WORKDIR:-$(pwd)}"
+cd "${PROJECT_ROOT}"
 
 # Load local environment defaults when available.
 if [[ -f .env ]]; then
