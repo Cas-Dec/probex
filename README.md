@@ -18,18 +18,6 @@ and 10 m wind. The current 2022 comparison uses monthly ERA5 records from
 | Depth curves and relative skill figures | `plot_record_depth.py` |
 | ERA5/HRES-fc0 reference-data comparison | `analysis/compare_era5_hresfc0_verification.py` |
 
-Depth evaluation follows the same **one model / one variable / loop over
-leads** structure as `forecast_evaluation_margin.py`. It uses the existing
-CRPS helpers and supports `IFS_ENS`, `FGN`, `uCast`, `ArchesWeatherGen` and
-`GenCast`, against ERA5 or HRES-fc0.
-
-Model selection does not guarantee that suitable forecasts are available.
-U-Cast and AWG have conversion scripts for supplied forecasts. AWG's configured
-leads are 48, 120, 168 and 240 h. GenCast's existing configuration uses 0.25°
-files; prepare consistently regridded inputs before comparing with 1.5° truth
-and records. `--resolution-tag 1p50` selects filenames for those prepared files;
-it does not perform regridding. Training/checkpoint provenance remains a
-separate inclusion check.
 
 ## Setup and data paths
 
