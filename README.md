@@ -8,14 +8,14 @@ and 10 m wind. The 2022 comparison uses monthly ERA5 records from
 
 | Content | Where to find it |
 | --- | --- |
-| Monthly heat, cold and wind records; optional local scales | `download/create_era5_records.py` |
+| Monthly heat, cold and wind local records + scales | `download/create_era5_records.py` |
 | Fair CRPS, all cases and observed records; fair rtwCRPS at the record | `eval/forecast_evaluation_crps.py` |
 | Fair Brier score, reliability and precision/recall | `eval/forecast_evaluation_occurrence.py` |
 | Ensemble-mean/median RMSE and bias | `eval/forecast_evaluation_point.py` |
-| Diagnostics grouped by observed physical record margin | `eval/forecast_evaluation_margin.py` |
-| Paired scores across standardized threshold depths | `eval/forecast_evaluation_depth.py` |
-| Lead-time figures from existing summaries | `plot_land_scores.py` |
-| Depth curves and relative skill figures | `plot_record_depth.py` |
+| Diagnostics grouped by  record margin | `eval/forecast_evaluation_margin.py` |
+| Diagnostics grouped by threshold depths | `eval/forecast_evaluation_depth.py` |
+| Lead-time figures | `plot_land_scores.py` |
+| Depth vs skill figures | `plot_record_depth.py` |
 | ERA5/HRES-fc0 reference-data comparison | `analysis/compare_era5_hresfc0_verification.py` |
 
 
