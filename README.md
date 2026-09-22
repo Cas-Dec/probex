@@ -38,33 +38,22 @@ export RECORDS_ROOT=/path/to/probex-data/era5_records
 export ERA5_RECORD_SOURCE=gs://weatherbench2/datasets/era5/1959-2023_01_10-6h-240x121_equiangular_with_poles_conservative.zarr
 ```
 
-On Biobot, the project data directory can be
-`/data/nvme1/bastiaan/probex-data`; no script requires that filesystem.
-`ERA5_TRUTH_ZARR` is the local verification store. `ERA5_RECORD_SOURCE` is the
-full historical source and must contain every requested historical timestamp;
-a 2022-only truth store cannot produce 1979–2021 records.
 
 ### ERA5 truth and records/scales
 
-If the local 2022 truth store is missing:
+To download ERA5
 
 ```bash
 python -u download/download_era5_truth_wb2.py --year 2022
 ```
 
-This downloads only T2m, W10 and the static land–sea mask at 1.5°, retaining
-00/12 UTC and the evaluation latitude range. It refuses to overwrite an
-existing store. Use `--validate-only` for its basic schema/year/hour check.
-The older `download_era5_wb2.py` is retained for its separate download workflow;
-it is not the compact two-variable truth-store builder.
-
-For monthly thresholds alone:
+For monthly thresholds alone,
 
 ```bash
 python -u download/create_era5_records.py
 ```
 
-For thresholds **and local scales**, in one shared reduction:
+For thresholds **and local scales**, 
 
 ```bash
 python -u download/create_era5_records.py --with-scale
