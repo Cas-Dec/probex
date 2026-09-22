@@ -12,11 +12,6 @@ Expected event-mask dimensions:
 
 Expected land-sea-mask dimensions:
     latitude, longitude
-
-Important:
-    We do not transform the ensemble forecast with transform_ERA5_time().
-    Instead, we convert forecast initialization time to valid time and select
-    matching truth/mask values from the already-transformed ERA5 arrays.
 """
 
 from __future__ import annotations

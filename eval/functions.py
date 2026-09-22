@@ -320,6 +320,8 @@ def evaluate_point_one_lead(
     median_fc = fc.median("number", skipna=True)
 
     outputs = {case: empty_point_result(lead_hour) for case in masks}
+    scalar_tasks = []
+    scalar_keys = []
 
     for case, event_mask in mask_sub.items():
         for season_name, months in zip(SEASON_NAMES, SEASON_MONTHS):
@@ -347,30 +349,16 @@ def evaluate_point_one_lead(
                     landsea,
                 )
 
-                n_val, rmse_mean_val, bias_mean_val, rmse_median_val, bias_median_val = dask.compute(
-                    n,
-                    rmse_mean,
-                    bias_mean,
-                    rmse_median,
-                    bias_median,
-                )
+                scalar_tasks.extend([n, rmse_mean, bias_mean, rmse_median, bias_median])
+                scalar_keys.append((case, season_name, landsea))
 
-                n_val = scalar(n_val)
-                rmse_mean_val = scalar(rmse_mean_val)
-                bias_mean_val = scalar(bias_mean_val)
-                rmse_median_val = scalar(rmse_median_val)
-                bias_median_val = scalar(bias_median_val)
-
-                loc = dict(
-                    leadtime=lead_hour,
-                    season=season_name,
-                    landsea=landsea,
-                )
-
-                outputs[case]["n"].loc[loc] = n_val
-                outputs[case]["rmse_mean"].loc[loc] = rmse_mean_val
-                outputs[case]["bias_mean"].loc[loc] = bias_mean_val
-                outputs[case]["rmse_median"].loc[loc] = rmse_median_val
-                outputs[case]["bias_median"].loc[loc] = bias_median_val
+    # Share forecast reads and ensemble reductions across cases, seasons and
+    # surfaces. Computing inside the loops rereads the same forecast chunks.
+    computed = dask.compute(*scalar_tasks)
+    names = ["n", "rmse_mean", "bias_mean", "rmse_median", "bias_median"]
+    for index, (case, season_name, landsea) in enumerate(scalar_keys):
+        loc = dict(leadtime=lead_hour, season=season_name, landsea=landsea)
+        for offset, name in enumerate(names):
+            outputs[case][name].loc[loc] = scalar(computed[5 * index + offset])
 
     return outputs

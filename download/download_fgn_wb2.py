@@ -109,7 +109,13 @@ x = x.sel(time=slice(f"{year - 1}-12-22", f"{year}-12-31T12:00:00"))
 t_hours = pd.DatetimeIndex(x.time.values).hour
 x = x.isel(time=np.where(t_hours.isin([0, 12]))[0])
 
+if x.sizes["number"] != N_MEMBERS:
+    raise ValueError(f"Expected {N_MEMBERS} FGN members, found {x.sizes['number']}.")
 x = x.isel(number=slice(0, N_MEMBERS))
+# Source labels may repeat across parameter checkpoints. Select positionally
+# and retain those labels as provenance while giving every trajectory a unique ID.
+x = x.assign_coords(source_sample=("number", x.number.values.copy()),
+                    number=np.arange(N_MEMBERS))
 
 # Source has (time, number, prediction_timedelta, longitude, latitude);
 # transpose to framework standard.

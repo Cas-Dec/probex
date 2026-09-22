@@ -46,6 +46,11 @@ RELIABILITY_BIN_CENTERS = 0.5 * (RELIABILITY_BINS[:-1] + RELIABILITY_BINS[1:])
 
 PR_THRESHOLDS = np.round(np.arange(0.0, 1.0001, 0.02), 4)
 
+# for empty reliability bins
+def _divide_positive(numerator: xr.DataArray, denominator: xr.DataArray):
+    """Keep unsupported diagnostics as NaN without evaluating division by zero."""
+    return numerator / denominator.where(denominator > 0)
+
 
 # =============================================================================
 # Monthly records at valid times
@@ -134,9 +139,11 @@ def weighted_occurrence_stats(
     # unchanged so existing plotting code continues to work.
     brier_field = (
         (p - y) ** 2
-        - p * (1.0 - p) / (member_count - 1.0)
+        - _divide_positive(p * (1.0 - p), member_count - 1.0)
     )
-    brier_score = (brier_field * weights).where(valid).sum(dim=dims) / denom
+    brier_score = _divide_positive(
+        (brier_field * weights).where(valid).sum(dim=dims), denom
+    )
 
     return observed_count, expected_count, brier_score
 
@@ -194,8 +201,8 @@ def reliability_stats(
 
         wsum = weights.where(in_bin).sum(dim=dims)
 
-        pmean = (p * weights).where(in_bin).sum(dim=dims) / wsum
-        ymean = (y * weights).where(in_bin).sum(dim=dims) / wsum
+        pmean = _divide_positive((p * weights).where(in_bin).sum(dim=dims), wsum)
+        ymean = _divide_positive((y * weights).where(in_bin).sum(dim=dims), wsum)
 
         counts.append(count)
         predicted.append(pmean)
@@ -261,9 +268,10 @@ def precision_recall_stats(
         fp = (valid & pred & (~y)).sum(dim=dims)
         fn = (valid & (~pred) & y).sum(dim=dims)
 
-        precision = tp / (tp + fp)
-        recall = tp / (tp + fn)
-        f1 = 2.0 * precision * recall / (precision + recall)
+        precision = _divide_positive(tp, tp + fp)
+        recall = _divide_positive(tp, tp + fn)
+        # F1 can still be defined (zero) when precision or recall is undefined.
+        f1 = _divide_positive(2.0 * tp, 2.0 * tp + fp + fn)
 
         precision_list.append(precision)
         recall_list.append(recall)
@@ -362,6 +370,12 @@ def empty_occurrence_result(lead_hour: int) -> xr.Dataset:
     ds["brier_score"].attrs["reference"] = (
         "Ferro (2014), doi:10.1002/qj.2270"
     )
+    for name in ["reliability_predicted", "reliability_observed"]:
+        ds[name].attrs["undefined_values"] = "NaN for bins with zero valid area weight"
+    ds["precision"].attrs["undefined_values"] = "NaN when there are no predicted events"
+    ds["recall"].attrs["undefined_values"] = "NaN when there are no observed events"
+    ds["f1"].attrs["formula"] = "2*TP / (2*TP + FP + FN)"
+    ds["f1"].attrs["undefined_values"] = "NaN when there are no predicted or observed events"
 
     return ds
 
@@ -578,7 +592,6 @@ def forecast_members_exceed(
     numerator = events.sum("number")
     denominator = finite_members.sum("number")
 
-    p = numerator / denominator
-    p = p.where(denominator > 0)
+    p = _divide_positive(numerator, denominator)
 
     return p

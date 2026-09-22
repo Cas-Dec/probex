@@ -1,342 +1,249 @@
+# ProbEx
 
-# probex: Probabilistic Ensemble Forecast Evaluation On Extremes
+Evaluation of probabilistic weather forecasts for record-breaking temperature
+and 10 m wind. The current 2022 comparison uses monthly ERA5 records from
+1979–2021, sampled at 00/12 UTC, on a common 1.5° grid north of 60°S.
 
-Evaluates probabilistic ensemble weather forecasts (IFS_ENS, FGN, ArchesWeatherGen, uCast) against verification data (ERA5, HRES-fc0) with a focus on record-breaking extremes. Computes fair CRPS, fair record-threshold weighted CRPS, fair Brier scores, probabilistic occurrence/reliability metrics, deterministic point scores, and margin-conditioned scores at 1.5° resolution.
+## What is implemented
 
-## Installation & Environment Setup
+| Component | Entry point |
+| --- | --- |
+| Monthly heat, cold and wind records; optional local scales | `download/create_era5_records.py` |
+| Fair CRPS, all cases and observed records; fair rtwCRPS at the record | `eval/forecast_evaluation_crps.py` |
+| Fair Brier score, reliability and precision/recall | `eval/forecast_evaluation_occurrence.py` |
+| Ensemble-mean/median RMSE and bias | `eval/forecast_evaluation_point.py` |
+| Diagnostics grouped by observed physical record margin | `eval/forecast_evaluation_margin.py` |
+| Paired scores across standardized threshold depths | `eval/forecast_evaluation_depth.py` |
+| Lead-time figures from existing summaries | `plot_land_scores.py` |
+| Depth curves and relative skill figures | `plot_record_depth.py` |
+| ERA5/HRES-fc0 reference-data comparison | `analysis/compare_era5_hresfc0_verification.py` |
 
-### 1. Clone the repository and navigate to the project root
-```bash
-cd /kyukon/data/gent/vo/000/gvo00090/vsc42145/Github/probex
-```
+Depth evaluation follows the same **one model / one variable / loop over
+leads** structure as `forecast_evaluation_margin.py`. It uses the existing
+CRPS helpers and supports `IFS_ENS`, `FGN`, `uCast`, `ArchesWeatherGen` and
+`GenCast`, against ERA5 or HRES-fc0.
 
-### 2. Create the Conda environment
+Model selection does not guarantee that suitable forecasts are available.
+U-Cast and AWG have conversion scripts for supplied forecasts. AWG's configured
+leads are 48, 120, 168 and 240 h. GenCast's existing configuration uses 0.25°
+files; prepare consistently regridded inputs before comparing with 1.5° truth
+and records. `--resolution-tag 1p50` selects filenames for those prepared files;
+it does not perform regridding. Training/checkpoint provenance remains a
+separate inclusion check.
+
+## Setup and data paths
+
+Run commands from the repository root in the project environment:
+
 ```bash
 conda env create -f environment.yaml
 conda activate probex
 ```
 
-### 3. Configure data paths (`.env` file)
-All data paths are centralized in the `.env` file. The file is already configured for the default HPC environment. Verify paths match your system:
+Scripts read `.env`; existing exported environment variables take precedence
+in the Python entry points. Configure local paths there, or export them:
 
 ```bash
-cat .env
+export FORECAST_ROOT=/path/to/probex-data/forecasts
+export ERA5_TRUTH_ZARR=/path/to/probex-data/era5/ERA5_2022_0012_no_Antarctic_1p50.zarr
+export RECORDS_ROOT=/path/to/probex-data/era5_records
+export ERA5_RECORD_SOURCE=gs://weatherbench2/datasets/era5/1959-2023_01_10-6h-240x121_equiangular_with_poles_conservative.zarr
 ```
 
-**Example `.env` file:**
-```bash
-HEAT_DATA=/data/gent/vo/000/gvo00090/HEAT/Data
-FORECAST_ROOT=/data/gent/vo/000/gvo00090/HEAT/Data/forecasts
-ERA5_ROOT=/data/gent/vo/000/gvo00090/HEAT/Data/wb2
-ERA5_TRUTH_ZARR=/data/gent/vo/000/gvo00090/HEAT/Data/wb2/1959-2023_01_10-6h-240x121_equiangular_with_poles_conservative.zarr
-RECORDS_ROOT=/data/gent/vo/000/gvo00090/HEAT/Data/wb2
+On Biobot, the project data directory can be
+`/data/nvme1/bastiaan/probex-data`; no script requires that filesystem.
+`ERA5_TRUTH_ZARR` is the local verification store. `ERA5_RECORD_SOURCE` is the
+full historical source and must contain every requested historical timestamp;
+a 2022-only truth store cannot produce 1979–2021 records.
 
-IFS_ENS_OUT_ROOT=/data/gent/vo/000/gvo00090/HEAT/Data/forecasts/IFS_ENS
-FGN_OUT_ROOT=/data/gent/vo/000/gvo00090/HEAT/Data/forecasts/FGN
-HRES_FC0_OUT_ROOT=/data/gent/vo/000/gvo00090/HEAT/Data/forecasts/HRES_fc0
+### ERA5 truth and records/scales
 
-UCAST_FORECASTS_2022=/data/gent/vo/000/gvo00090/HEAT/Data/forecasts/ucast_forecasts_2022.zarr
-ARCHESWEATHERGEN_FORECASTS_2022=/data/gent/vo/000/gvo00090/HEAT/Data/forecasts/archesweathergen_forecasts_2022.zarr
-```
-
-**Key paths:**
-- `FORECAST_ROOT` — Root directory for all forecast model outputs (per-lead files)
-- `ERA5_ROOT` — ERA5 and HRES-fc0 truth data
-- `ERA5_TRUTH_ZARR` — ERA5 Zarr store (shared data, all years 1959–2023)
-- `RECORDS_ROOT` — Monthly climatological records (NetCDF) and land-sea mask
-- `IFS_ENS_OUT_ROOT`, `FGN_OUT_ROOT`, `HRES_FC0_OUT_ROOT` — Download destinations for each model
-- `UCAST_FORECASTS_*`, `ARCHESWEATHERGEN_FORECASTS_*` — Combined source Zarr locations (used only during conversion)
-
-### 4. Fix line endings (if scripts were edited on Windows)
-```bash
-dos2unix bash_scripts/*.sh
-dos2unix job_scripts/*.pbs
-```
-
-### 5. Portable Environment Discovery (for Collaborators)
-
-All bash scripts in `bash_scripts/` are portable: they automatically discover the probex environment and work on any system where:
-1. Conda is installed
-2. The `probex` environment exists (created via `conda env create -f environment.yaml`)
-
-**How it works:** Each script sources `find_probex_env.sh` which searches standard conda locations and exports:
-- `PROBEX_PYTHON` — Path to probex Python executable
-
-Scripts use this variable instead of hardcoded paths, ensuring they work across different conda installations and user environments.
-
-**For different conda/miniconda setups:**  
-The helper script searches these standard locations:
-```
-~/.conda/envs/probex
-~/.local/miniconda/envs/probex
-~/.local/miniconda3/envs/probex
-~/miniconda/envs/probex
-~/miniconda3/envs/probex
-~/mambaforge/envs/probex
-```
-
-If your conda installation uses a different location, manually edit the search paths in `find_probex_env.sh`.
-
-## Quick Start: Running a 2022 Analysis
-
-This workflow downloads and evaluates 4 models (IFS_ENS, FGN, uCast, ArchesWeatherGen) for year 2022. Lead times: IFS_ENS/FGN/uCast [12, 48, 120, 168, 240]h; ArchesWeatherGen [48, 120, 168, 240]h (12h unavailable). Variables: t2m and w10.
-
-### Step 1: Generate ERA5 Monthly Records
-One-time setup: creates monthly climatological extrema from ERA5 (1979–2021), using 00 and 12 UTC verification times.
+If the local 2022 truth store is missing:
 
 ```bash
-qsub job_scripts/submit_create_era5_records.pbs
+python -u download/download_era5_truth_wb2.py --year 2022
 ```
 
-### Step 2: Download WeatherBench 2 Data
-Download forecast and truth data for 2022.
+This downloads only T2m, W10 and the static land–sea mask at 1.5°, retaining
+00/12 UTC and the evaluation latitude range. It refuses to overwrite an
+existing store. Use `--validate-only` for its basic schema/year/hour check.
+The older `download_era5_wb2.py` is retained for its separate download workflow;
+it is not the compact two-variable truth-store builder.
 
-**ERA5 & HRES_fc0 (Truth Data):**
+For monthly thresholds alone:
+
 ```bash
-qsub job_scripts/submit_download_era5_wb2.pbs
-qsub job_scripts/submit_download_hres_fc0_wb2.pbs
+python -u download/create_era5_records.py
 ```
 
-**IFS_ENS & FGN (Ensemble Forecasts from WeatherBench 2):**
+For thresholds **and local scales**, in one shared reduction:
+
 ```bash
-qsub job_scripts/submit_download_ifs_ens_wb2.pbs  # Array job: 2 vars × 5 leads
-qsub job_scripts/submit_download_fgn_wb2.pbs     # Array job: 2 vars × 5 leads
+python -u download/create_era5_records.py --with-scale
 ```
 
-**uCast (Combined Source Zarr):**
-TODO: ADD INSTRUCTIONS
-- Source: WeatherBench 2
-- Output format: `ucast_forecasts_{year}.zarr` (combined all lead times)
-- Variables: 2m_temperature, 10m_wind_speed
-- Lead times: [12, 48, 120, 168, 240]h
-- Ensemble members: 64
-- Expected location: `/data/gent/vo/000/gvo00090/HEAT/Data/forecasts/`
+The defaults are 1979–2021, 00/12 UTC and the full global record grid, preserving
+the original main-branch record domain. If adding scales to records previously
+created on Biobot with a southern bound of −60°, use `--lat-min -60` again.
+Existing records are checked before a corresponding scale file is written;
+a different grid, source, baseline or sampling requires resolving the mismatch.
+Do not delete existing records merely to bypass this check.
 
-**ArchesWeatherGen (Combined Source Zarr):**
-TODO: ADD INSTRUCTIONS
-- Source: WeatherBench 2
-- Output format: `archesweathergen_forecasts_{year}.zarr` (combined all lead times)
-- Variables: 2m_temperature, 10m_wind_speed
-- Lead times: [48, 120, 168, 240]h (12h not available)
-- Ensemble members: 64
-- Expected location: `/data/gent/vo/000/gvo00090/HEAT/Data/forecasts/`
+The source may be local or `gs://`. Historical fields are reduced lazily; no
+full historical ERA5 archive is saved locally. Progress counts completed Dask
+tasks, not bytes or a reliable remaining-time estimate.
 
-### Step 3: Convert Combined-Source Forecasts to Per-Lead Format
-uCast and ArchesWeatherGen are downloaded as combined Zarr stores (one per year, all lead times merged). These must be converted to per-lead files for evaluation:
+Outputs in `RECORDS_ROOT`:
 
-```bash
-bash bash_scripts/run_convert_ucast_wb2.sh [year]
-bash bash_scripts/run_convert_arches_wb2.sh [year]
-```
+- `ERA5_record_{max|min}_month_1979_2021_t2m.nc`
+- `ERA5_record_max_month_1979_2021_w10.nc`
+- `ERA5_lsm_sfc.nc`
+- With `--with-scale`: matching `ERA5_record_scale_...nc` files containing
+  `record` and `scale` on `(month, lat, lon)`.
 
-Or via PBS for batch processing:
-```bash
-qsub job_scripts/submit_convert_ucast_wb2.pbs
-qsub job_scripts/submit_convert_arches_wb2.pbs
-```
+For each grid cell and calendar month, the scale is the sample standard
+deviation (`ddof=1`) across the **43 yearly monthly maxima or minima**.
+It is not the SD of monthly means or within-month weather values; no detrending
+is applied. Complete timestamps are required. Scale generation also rejects
+non-finite historical monthly blocks. Metadata records the source, years,
+hours and scale definition.
 
-**Why conversion?** The evaluation pipeline loads one lead at a time from separate per-lead Zarr files (matching the structure of IFS_ENS and FGN). The conversion scripts:
-1. Read the combined source (`ucast_forecasts_{year}.zarr` or `archesweathergen_forecasts_{year}.zarr`)
-2. Extract each lead time separately
-3. Rename dimensions and coordinates to match evaluation expectations
-4. Save as individual per-lead files (e.g., `uCast_2022_no_Antarctic_t2m_m64_1p50_lead_012h.zarr`)
-
-**Lead-time coverage (per-lead files):**
-- **uCast**: [12, 48, 120, 168, 240]h ✓
-- **ArchesWeatherGen**: [48, 120, 168, 240]h (12h not available; runs on 24h steps)
-
-### Step 4: Run Evaluations
-Evaluate all 4 models across 4 metrics: CRPS, point, occurrence (probabilistic), margin.
+The shell wrapper calculates both records and scales. It uses four positional
+arguments: record tag, first year, last year and UTC hours.
 
 ```bash
-# CRPS evaluation (array job: 4 models × 2 vars = 8 tasks)
-qsub job_scripts/submit_eval_crps_all.pbs
-
-# Deterministic point scores
-qsub job_scripts/submit_eval_point_all.pbs
-
-# Probabilistic occurrence/reliability
-qsub job_scripts/submit_eval_occurrence_all.pbs
-
-# Margin-conditioned scores (e.g., how many σ above record)
-qsub job_scripts/submit_eval_margin_all.pbs
-```
-
-Results saved to `results/{model}/{METRIC}/`.
-
-**Important**: IFS_ENS is verified against HRES_fc0 deterministic forecasts (not ERA5), while other models (uCast, ArchesWeatherGen, FGN) are verified against ERA5. This is automatic—no configuration needed.
-
-For backward compatibility, the occurrence output variable remains named
-`brier_score`, but it contains Ferro's fair finite-ensemble estimator.
-
-## Running Scripts Locally (for Debugging & Quick Tests)
-
-All scripts in `bash_scripts/` can be run directly without PBS for development, testing, and debugging:
-
-```bash
-# Generate ERA5 records
-bash bash_scripts/run_create_era5_records.sh [record_tag] [start_year] [end_year] [hours]
-bash bash_scripts/run_create_era5_records.sh 1979_2021 1979 2021 0,12  # default
-
-# Download data
-bash bash_scripts/run_download_era5_wb2.sh [variable]
-bash bash_scripts/run_download_hres_fc0_wb2.sh [variable]
-bash bash_scripts/run_download_ifs_ens_wb2.sh [variable] [lead_hour]
-
-# Convert model-specific forecasts
-bash bash_scripts/run_convert_ucast_wb2.sh [year]
-bash bash_scripts/run_convert_arches_wb2.sh [year]
-
-# Run evaluations
-bash bash_scripts/run_eval_crps.sh [model] [variable] [year] [truth] [record_tag]
-bash bash_scripts/run_eval_point.sh [model] [variable] [year] [truth] [record_tag]
-bash bash_scripts/run_eval_occurrence.sh [model] [variable] [year] [truth] [record_tag]
-bash bash_scripts/run_eval_margin.sh [model] [variable] [year] [truth] [record_tag] [margin_max] [margin_step]
-```
-
-**Examples:**
-```bash
-# Create records for full 1979-2021 baseline
 bash bash_scripts/run_create_era5_records.sh 1979_2021 1979 2021 0,12
-
-# Download t2m data
-bash bash_scripts/run_download_era5_wb2.sh 2m_temperature
-bash bash_scripts/run_download_ifs_ens_wb2.sh 2m_temperature 12
-
-# Evaluate IFS_ENS t2m CRPS for 2022 vs ERA5
-bash bash_scripts/run_eval_crps.sh IFS_ENS t2m 2022 ERA5 1979_2021
-
-# Test FGN w10 point scores
-bash bash_scripts/run_eval_point.sh FGN w10 2022 ERA5 1979_2021
 ```
 
-Scripts automatically log to `logs/` and save results to `results/{model}/{metric}/`.
+For a different latitude range, use the Python command directly with
+`--with-scale --lat-min -60`, as described above.
 
-## Advanced: Custom Runs
+### Forecast inputs
 
-### Override variables at submission
+Existing WB2 downloaders and conversion scripts remain in `download/`.
+For example, download one IFS/FGN lead:
+
 ```bash
-# Specific year and truth data
-qsub -v YEAR=2018,TRUTH=HRES_fc0 job_scripts/submit_eval_point.pbs
-
-# Custom margin thresholds
-qsub -v MARGIN_MAX=10,MARGIN_STEP=0.5 job_scripts/submit_eval_margin.pbs
+python download/download_ifs_ens_wb2.py --year 2022 --variable 2m_temperature --lead-hour 48
+python download/download_fgn_wb2.py --year 2022 --variable 2m_temperature --lead-hour 48
 ```
 
-### Run single task
+Repeat for the needed leads and `10m_wind_speed`, or use the existing shell/PBS
+wrappers. Main's IFS source and remote-access fixes are retained. FGN member
+coordinates are unique positional IDs; the original source labels are kept
+as `source_sample`, without inferring parameter-seed identities.
+
+The per-lead contract is:
+
+```text
+FORECAST_ROOT/<model>/<model>_2022_no_Antarctic_<t2m|w10>_m<50|64>_1p50_lead_<HHH>h.zarr
+Dimensions: time, number, prediction_timedelta, latitude, longitude
+```
+
+`time` denotes initialization; verification uses initialization plus lead.
+Do not assume every model includes December 2021 initializations needed for
+all early-January 2022 valid times. `eval/forecast_loader.py` and its companion
+README are retained as optional loading utilities; existing evaluators still
+use the per-lead files directly.
+
+## Evaluate and plot
+
+Both plotting scripts run from top to bottom: read and check the summaries,
+calculate comparisons, draw the figures, and save PNG/PDF files.
+
+For one model/variable against a common ERA5 reference:
+
 ```bash
-# Task IDs: 1=IFS_ENS/t2m, 2=IFS_ENS/w10, 3=FGN/t2m, 4=FGN/w10, 5=uCast/t2m, 6=uCast/w10, 7=Arches/t2m, 8=Arches/w10
-qsub -t 1 job_scripts/submit_eval_crps_all.pbs    # Run only IFS_ENS t2m
+python eval/forecast_evaluation_crps.py --year 2022 --var t2m --model IFS_ENS --truth ERA5
+python eval/forecast_evaluation_occurrence.py --year 2022 --var t2m --model IFS_ENS --truth ERA5
+python eval/forecast_evaluation_point.py --year 2022 --var t2m --model IFS_ENS --truth ERA5
 ```
 
-### Run evaluation scripts locally (debugging)
+Repeat for FGN and W10. These use model-specific lead lists already in the
+scripts (IFS/FGN: 12, 48, 120, 168, 240 h) and save to `results/<model>/`.
+After these summaries exist:
+
 ```bash
-# Must activate conda environment first
-conda activate probex
-python -u eval/forecast_evaluation_crps.py --year 2022 --var t2m --model IFS_ENS --truth ERA5
-python -u eval/forecast_evaluation_point.py --year 2022 --var t2m --model uCast --truth ERA5
-python -u eval/forecast_evaluation_occurrence.py --year 2022 --var t2m --model ArchesWeatherGen --truth ERA5
-python -u eval/forecast_evaluation_margin.py --year 2022 --var t2m --model FGN --truth ERA5
+python plot_land_scores.py --models IFS_ENS FGN --surface land --truth ERA5
 ```
 
-## Data Structure
+Missing point-score files leave labelled empty RMSE panels. This plotter reads
+saved summaries; it cannot repair unmatched verification dates in older runs.
 
-**Grid:** 1.5° equiangular (240 × 121 points, -60° to 90° latitude, -180° to 180° longitude)
+For depth evaluation, use the same interface as the margin script:
 
-```
-/data/gent/vo/000/gvo00090/HEAT/Data/
-├── wb2/
-│   ├── 1959-2023_01_10-6h-240x121_equiangular_with_poles_conservative.zarr  (ERA5 truth)
-│   ├── ERA5_record_max_month_1979_2021_{t2m,w10}.nc  (Monthly max extrema)
-│   ├── ERA5_record_min_month_1979_2021_t2m.nc  (Monthly min extrema, t2m only)
-│   └── ERA5_lsm_sfc.nc  (Land-sea mask)
-│
-├── forecasts/
-│   ├── HRES_fc0/
-│   │   └── HRES_fc0_{year}_no_Antarctic_{var}_1p50.zarr  (Deterministic reference)
-│   ├── IFS_ENS/
-│   │   └── IFS_ENS_{year}_no_Antarctic_{var}_m50_1p50_lead_{LLL}h.zarr  (Per-lead files)
-│   ├── FGN/
-│   │   └── FGN_{year}_no_Antarctic_{var}_m64_1p50_lead_{LLL}h.zarr  (Per-lead files)
-│   ├── uCast/
-│   │   └── uCast_{year}_no_Antarctic_{var}_m64_1p50_lead_{LLL}h.zarr  (Per-lead files)
-│   ├── ArchesWeatherGen/
-│   │   └── ArchesWeatherGen_{year}_no_Antarctic_{var}_m64_1p50_lead_{LLL}h.zarr  (Per-lead files)
-│   ├── ucast_forecasts_{year}.zarr  (Combined source — used ONLY for conversion)
-│   └── archesweathergen_forecasts_{year}.zarr  (Combined source — used ONLY for conversion)
-│
-results/
-├── {model}/
-│   ├── CRPS/
-│   ├── Point/
-│   ├── Occurrence/
-│   └── Margin/
-```
-
-### Clarification: Combined vs Per-Lead Data
-
-- **Per-lead files** (in `uCast/`, `ArchesWeatherGen/`, `IFS_ENS/`, `FGN/` folders): 
-  - Separate Zarr file for each lead time (e.g., `uCast_2022_no_Antarctic_t2m_m64_1p50_lead_012h.zarr`)
-  - **Used directly by evaluation scripts** ← Required
-  - All 4 models use this format for evaluation
-
-- **Combined sources** (`ucast_forecasts_{year}.zarr`, `archesweathergen_forecasts_{year}.zarr`):
-  - Single Zarr store per year with all lead times merged
-  - **Intermediate data only** — downloaded once, converted once, then can be deleted
-  - Used **only** by conversion scripts (`convert_ucast_wb2.py`, `convert_arches_wb2.py`)
-  - **Safe to delete after conversion completes successfully** — not needed for evaluation
-  
-**Disk management**: After running conversion scripts, you can free substantial disk space by removing the combined source Zarrs, keeping only the per-lead files in the model folders.
-
-## Important Notes
-
-### Model Configuration
-Valid model names and their properties:
-| Model | Lead times | Ensemble size | Truth data |
-|-------|-----------|---------------|-----------|
-| IFS_ENS | [12, 48, 120, 168, 240]h | 50 | HRES_fc0 |
-| FGN | [12, 48, 120, 168, 240]h | 64 | ERA5 |
-| uCast | [12, 48, 120, 168, 240]h | 64 | ERA5 |
-| ArchesWeatherGen | [48, 120, 168, 240]h | 64 | ERA5 |
-| HRES_fc0 | all valid times | — (deterministic) | — (is the truth) |
-
-### Parameters
-- **`record_tag`**: Tag for ERA5 record climatology baseline (e.g., `1979_2021`). 
-  - Default: `1979_2021` (recommended for most analyses)
-  - Create new records via: `bash bash_scripts/run_create_era5_records.sh <tag> <start_year> <end_year> <hours>`
-  - Each tag produces independent record sets; useful for sensitivity analysis
-- **Evaluation cases**: "max" (record-breaking highs), "min" (record-breaking lows, t2m only), "all" (no record filter).
-- **Coordinate conventions**: Longitude normalized to ±180°, latitude sorted south-to-north.
-
-### Memory & Performance
-- **Dask chunking**: Forecasts chunked as `{time: 31, number: -1, latitude: 30, longitude: 60}` for memory efficiency.
-- **Per-lead processing**: Each lead time is processed, computed, and deleted separately to minimize peak memory usage.
-- **Data format**: All data uses Zarr format with conservative gridding (accounts for poles correctly).
-
-## Troubleshooting
-
-### Environment not found
-If you see `ERROR: probex conda environment not found`, ensure:
-1. The environment was created: `conda env create -f environment.yaml`
-2. You're running from the project root directory
-3. Your conda installation is on the standard search path (checked by `find_probex_env.sh`)
-
-**Custom conda location:** If your conda environment is in a non-standard location, edit `find_probex_env.sh` to add your path to the search list.
-
-### Data alignment error (xarray)
-If evaluation scripts fail with `ValueError: cannot reindex or align along dimension 'longitude' because the (pandas) index has duplicate values`:
-- Issue: Forecast or truth data has duplicate longitude values in the coordinate
-- Likely cause: Coordinate normalization (±180°, south-to-north latitude) not applied correctly
-- Solution: Check [functions.py](eval/functions.py) for coordinate validation and normalization logic
-
-### Running out of memory during large evaluations
-Solutions:
-1. Reduce dask chunk size in evaluation scripts (default: `{time: 31, number: -1, latitude: 30, longitude: 60}`)
-2. Increase available memory per PBS job (edit `*_all.pbs` files)
-3. Run evaluation tasks sequentially instead of in parallel arrays
-
-### Script not executable / Permission denied
 ```bash
-chmod +x bash_scripts/*.sh
-chmod +x find_probex_env.sh
+python -u eval/forecast_evaluation_depth.py \
+  --year 2022 --var t2m --model FGN --truth ERA5 \
+  --leads 12 48 120 240 --depths 0 0.5 1 2
 ```
+
+Each run evaluates one model and variable, with heat/cold cases for T2m or
+upper records for W10. All/land/sea results are saved together. Outputs go to
+`results/<model>/Depth/`: one summary NetCDF, CSV and daily-sum NetCDF per
+record case. No shard management or resume system is involved; rerunning
+recomputes and replaces these outputs.
+
+For a model comparison, give each run the **same** comparison models and leads
+so its valid dates are selected from their common overlap:
+
+```bash
+for model in IFS_ENS FGN; do
+  for var in t2m w10; do
+    python -u eval/forecast_evaluation_depth.py \
+      --year 2022 --var "$var" --model "$model" --truth ERA5 \
+      --compare-models IFS_ENS FGN --leads 12 48 120 240 \
+      --depths 0 0.5 1 2
+  done
+done
+python plot_record_depth.py --models IFS_ENS FGN --surface land
+```
+
+To include AWG or U-Cast, add their names to `--compare-models` and run them
+with `--model ArchesWeatherGen` or `--model uCast`. All comparison inputs must
+be present. With AWG, select common leads such as `48 120 240`.
+`--compare-models` checks the other models' metadata and dates; it scores only
+the model named by `--model`.
+
+At depth `k`, the threshold is `R + k*s` for heat/wind and `R - k*s` for cold.
+`k=0` is the historical record boundary. Fair rtwCRPS and Brier scores use all
+eligible cases. CRPS/RMSE conditioned on observations beyond that threshold
+remain secondary diagnostics. The code reuses the existing CRPS/clipping
+helpers and centers temperatures when computing small tail scores.
+
+Inputs require exact matching grids, complete ensembles and consistent
+historical metadata. Non-finite eligible forecast/truth values cause an error;
+zero historical scales are excluded. No nearest-neighbour regridding is done.
+
+The plotter reads the per-model summaries and checks dates, reference data,
+depths and event counts before computing relative skill. It saves ordinary
+score curves and `100 * (1 - model_score / reference_score)` with IFS_ENS as the
+default reference. Negative skill is allowed. Ratios are not drawn where the
+reference score is nonpositive or there are no observed exceedances; raw
+scores remain available. Figures go to `figures/record_depth/`.
+
+To plot earlier combined Biobot depth outputs, use
+`python plot_record_depth.py --results results/Depth`.
+
+## Interpretation and remaining work
+
+- Fair corrections target finite-ensemble sampling effects under appropriate
+  independent-sampling assumptions. The empirical CRPS is a valid score for
+  the issued empirical distribution; it was not an invalid formula. The depth
+  output retains empirical companions for comparison, including for pooled
+  model-seed ensembles whose sampling assumptions need checking.
+- CRPS/RMSE conditioned on observed records are descriptive. Primary tail
+  comparisons use all-case rtwCRPS and Brier scores. Lower raw tail scores at
+  deeper thresholds do not by themselves mean increasing skill.
+- Daily paired contributions are saved, but **bootstrap confidence intervals
+  are not implemented**. Counts are grid-cell-times, not independent events.
+- For 2022, records must end in 2021. Older evaluation years need a strictly
+  earlier record baseline. Training/checkpoint provenance is a separate check;
+  these scripts do not establish a strict out-of-training evaluation.
+- All evaluators, including depth, allow `--truth HRES_fc0`. Some `job_scripts/submit_eval_*_all.pbs` default to HRES_fc0
+  for IFS and ERA5 for AI models. Set `TRUTH=ERA5` explicitly for a common-ERA5
+  comparison (for PBS, pass it with `qsub -v`).
+- Reference-data sensitivity and HRES-fc0 coverage diagnostics remain in
+  [`analysis/README_VERIFICATION_COMPARISON.md`](analysis/README_VERIFICATION_COMPARISON.md).
+  The baseline comparison and saved-result comparison scripts are documented
+  in [`analysis/README.md`](analysis/README.md).
