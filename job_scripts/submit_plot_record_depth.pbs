@@ -1,0 +1,67 @@
+#!/usr/bin/env bash
+# Depth-vs-skill figures from the summaries produced by submit_eval_depth_all.pbs.
+# Two plot_record_depth.py calls are needed because that script takes one global
+# --truth: ArchesWeatherGen/uCast/FGN were verified against ERA5, IFS_ENS against
+# HRES_fc0, so they cannot be combined into a single relative-skill figure.
+#
+# Submit after the eval array has finished, e.g.:
+#   EVAL_JOB=$(qsub job_scripts/submit_eval_depth_all.pbs)
+#   qsub -W depend=afterok:${EVAL_JOB} job_scripts/submit_plot_record_depth.pbs
+# (this cluster's qsub is a PBS-to-Slurm translation layer: Slurm has no
+# "afterokarray" dependency type, so plain "afterok" on the array's base
+# job ID is what waits for all of its tasks to finish successfully)
+#PBS -N plot_record_depth
+#PBS -l walltime=00:30:00
+#PBS -l nodes=1:ppn=1
+#PBS -l mem=16gb
+#PBS -o job_scripts/logs/submit_plot_record_depth.log
+#PBS -j oe
+
+set -euo pipefail
+
+PROJECT_ROOT="${PBS_O_WORKDIR:-$(pwd)}"
+if [[ ! -f "${PROJECT_ROOT}/find_probex_env.sh" && -f "${PROJECT_ROOT}/../find_probex_env.sh" ]]; then
+  PROJECT_ROOT="$(cd "${PROJECT_ROOT}/.." && pwd)"
+fi
+cd "${PROJECT_ROOT}"
+
+if [[ -f .env ]]; then
+  set -a
+  source .env
+  set +a
+fi
+
+# Find probex environment
+source "./find_probex_env.sh"
+
+YEAR="${YEAR:-2022}"
+RECORD_TAG="${RECORD_TAG:-1979_2021}"
+SURFACE="${SURFACE:-land}"
+
+LOG_DIR="${PROJECT_ROOT}/job_scripts/logs"
+mkdir -p "${LOG_DIR}"
+LOG_FILE="${LOG_DIR}/submit_plot_record_depth_${YEAR}_${SURFACE}.log"
+exec > >(tee -a "${LOG_FILE}") 2>&1
+
+echo "Plotting record-depth figures"
+echo "year       = ${YEAR}"
+echo "record tag = ${RECORD_TAG}"
+echo "surface    = ${SURFACE}"
+echo "workdir    = $(pwd)"
+date
+hostname
+
+echo "--- ERA5-verified models: ArchesWeatherGen, uCast, FGN ---"
+"${PROBEX_PYTHON}" plot_record_depth.py \
+  --models ArchesWeatherGen uCast FGN --truth ERA5 \
+  --year "${YEAR}" --record-tag "${RECORD_TAG}" \
+  --reference FGN --surface "${SURFACE}"
+
+echo "--- HRES_fc0-verified model: IFS_ENS ---"
+"${PROBEX_PYTHON}" plot_record_depth.py \
+  --models IFS_ENS --truth HRES_fc0 \
+  --year "${YEAR}" --record-tag "${RECORD_TAG}" \
+  --surface "${SURFACE}"
+
+echo "Finished plotting record-depth figures"
+date

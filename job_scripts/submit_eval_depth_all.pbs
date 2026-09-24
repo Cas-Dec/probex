@@ -1,0 +1,76 @@
+#!/usr/bin/env bash
+# Depth evaluation (fair CRPS/RMSE/rtwCRPS/Brier vs record depth) for all 4 models:
+# ArchesWeatherGen, uCast and FGN verified against ERA5; IFS_ENS verified against HRES_fc0.
+#PBS -N eval_depth_all
+#PBS -l walltime=12:00:00
+#PBS -l nodes=1:ppn=4
+#PBS -l mem=64gb
+#PBS -o job_scripts/logs/submit_eval_depth_all.log
+#PBS -j oe
+#PBS -t 1-8%2
+
+set -euo pipefail
+
+PROJECT_ROOT="${PBS_O_WORKDIR:-$(pwd)}"
+if [[ ! -f "${PROJECT_ROOT}/find_probex_env.sh" && -f "${PROJECT_ROOT}/../find_probex_env.sh" ]]; then
+  PROJECT_ROOT="$(cd "${PROJECT_ROOT}/.." && pwd)"
+fi
+cd "${PROJECT_ROOT}"
+
+TASK_ID="${PBS_ARRAYID}"
+IDX=$((TASK_ID - 1))
+
+# Tasks 1-8: 4 models x 2 variables
+MODELS=("IFS_ENS" "IFS_ENS" "ArchesWeatherGen" "ArchesWeatherGen" "uCast" "uCast" "FGN" "FGN")
+VARS=("t2m" "w10" "t2m" "w10" "t2m" "w10" "t2m" "w10")
+
+MODEL="${MODELS[$IDX]}"
+VAR="${VARS[$IDX]}"
+YEAR="${YEAR:-2022}"
+
+# Model-specific truth: IFS_ENS uses HRES_fc0, the AI models use ERA5.
+if [ "${MODEL}" == "IFS_ENS" ]; then
+    TRUTH="${TRUTH:-HRES_fc0}"
+else
+    TRUTH="${TRUTH:-ERA5}"
+fi
+
+RECORD_TAG="${RECORD_TAG:-1979_2021}"
+# ArchesWeatherGen has no 12h lead: keep leads common across all 4 models so
+# --compare-models establishes identical verification dates in every run,
+# even though IFS_ENS and the AI models use different truth stores.
+LEADS="${LEADS:-48 120 168 240}"
+DEPTHS="${DEPTHS:-0 0.5 1 2}"
+COMPARE_MODELS="${COMPARE_MODELS:-IFS_ENS ArchesWeatherGen uCast FGN}"
+
+LOG_DIR="${PROJECT_ROOT}/job_scripts/logs"
+mkdir -p "${LOG_DIR}"
+LOG_FILE="${LOG_DIR}/submit_eval_depth_all_task${TASK_ID}_${MODEL}_${VAR}_${YEAR}.log"
+exec > >(tee -a "${LOG_FILE}") 2>&1
+
+
+export OMP_NUM_THREADS=1
+export MKL_NUM_THREADS=1
+export OPENBLAS_NUM_THREADS=1
+export NUMEXPR_NUM_THREADS=1
+
+echo "Running depth eval array task"
+echo "task id        = ${TASK_ID}"
+echo "model          = ${MODEL}"
+echo "variable       = ${VAR}"
+echo "year           = ${YEAR}"
+echo "truth          = ${TRUTH}"
+echo "records        = ${RECORD_TAG}"
+echo "leads          = ${LEADS}"
+echo "depths         = ${DEPTHS}"
+echo "compare-models = ${COMPARE_MODELS}"
+echo "log file       = ${LOG_FILE}"
+date
+hostname
+
+echo "Launching: bash bash_scripts/run_eval_depth.sh ${MODEL} ${VAR} ${YEAR} ${TRUTH} ${RECORD_TAG} \"${LEADS}\" \"${DEPTHS}\" \"${COMPARE_MODELS}\""
+bash bash_scripts/run_eval_depth.sh "${MODEL}" "${VAR}" "${YEAR}" "${TRUTH}" "${RECORD_TAG}" "${LEADS}" "${DEPTHS}" "${COMPARE_MODELS}"
+echo "Runner exit status: $?"
+
+echo "Finished depth eval array task"
+date
