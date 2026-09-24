@@ -213,7 +213,7 @@ def main(argv=None):
         surfaces = xr.concat([xr.ones_like(lsm, dtype=bool), lsm > 0.5, lsm <= 0.5], dim=xr.IndexVariable("landsea", functions.LANDSEA_NAMES))
         histories = {}
         for case in (["max", "min"] if args.var == "t2m" else ["max"]):
-            path = args.records_root / f"ERA5_record_scale_{case}_month_{args.record_tag}_{args.var}.nc"
+            path = args.records_root / f"ERA5_record_{case}_month_{args.record_tag}_{args.var}.nc"
             with xr.open_dataset(path) as source:
                 hist = normalize_grid(source).load()
             require_same_grid(truth, hist)
