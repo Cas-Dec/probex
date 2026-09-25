@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
 # Depth-vs-skill figures from the summaries produced by submit_eval_depth_all.pbs.
-# Two plot_record_depth.py calls are needed because that script takes one global
-# --truth: ArchesWeatherGen/uCast/FGN were verified against ERA5, IFS_ENS against
-# HRES_fc0, so they cannot be combined into a single relative-skill figure.
+# Now with all 4 models evaluated against both truth sources (16 tasks total),
+# we can plot each truth group with all 4 models for full comparative analysis.
 #
 # Submit after the eval array has finished, e.g.:
 #   EVAL_JOB=$(qsub job_scripts/submit_eval_depth_all.pbs)
@@ -51,17 +50,17 @@ echo "workdir    = $(pwd)"
 date
 hostname
 
-echo "--- ERA5-verified models: ArchesWeatherGen, uCast, FGN ---"
+echo "--- ERA5-verified models: all 4 models (IFS_ENS, ArchesWeatherGen, uCast, FGN) ---"
 "${PROBEX_PYTHON}" plot_record_depth.py \
-  --models ArchesWeatherGen uCast FGN --truth ERA5 \
+  --models IFS_ENS ArchesWeatherGen uCast FGN --truth ERA5 \
   --year "${YEAR}" --record-tag "${RECORD_TAG}" \
-  --reference FGN --surface "${SURFACE}"
+  --reference IFS_ENS --surface "${SURFACE}"
 
-echo "--- HRES_fc0-verified model: IFS_ENS ---"
+echo "--- HRES_fc0-verified models: all 4 models (IFS_ENS, ArchesWeatherGen, uCast, FGN) ---"
 "${PROBEX_PYTHON}" plot_record_depth.py \
-  --models IFS_ENS --truth HRES_fc0 \
+  --models IFS_ENS ArchesWeatherGen uCast FGN --truth HRES_fc0 \
   --year "${YEAR}" --record-tag "${RECORD_TAG}" \
-  --surface "${SURFACE}"
+  --reference IFS_ENS --surface "${SURFACE}"
 
 echo "Finished plotting record-depth figures"
 date

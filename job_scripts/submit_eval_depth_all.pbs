@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
-# Depth evaluation (fair CRPS/RMSE/rtwCRPS/Brier vs record depth) for all 4 models:
-# ArchesWeatherGen, uCast and FGN verified against ERA5; IFS_ENS verified against HRES_fc0.
+# Depth evaluation (fair CRPS/RMSE/rtwCRPS/Brier vs record depth) for all 4 models
+# against all truth sources: 4 models × 2 variables × 2 truths = 16 tasks.
 #PBS -N eval_depth_all
 #PBS -l walltime=12:00:00
 #PBS -l nodes=1:ppn=4
 #PBS -l mem=64gb
 #PBS -o job_scripts/logs/submit_eval_depth_all.log
 #PBS -j oe
-#PBS -t 1-8%2
+#PBS -t 1-16%2
 
 set -euo pipefail
 
@@ -20,20 +20,17 @@ cd "${PROJECT_ROOT}"
 TASK_ID="${PBS_ARRAYID}"
 IDX=$((TASK_ID - 1))
 
-# Tasks 1-8: 4 models x 2 variables
-MODELS=("IFS_ENS" "IFS_ENS" "ArchesWeatherGen" "ArchesWeatherGen" "uCast" "uCast" "FGN" "FGN")
-VARS=("t2m" "w10" "t2m" "w10" "t2m" "w10" "t2m" "w10")
+# Tasks 1-16: 4 models × 2 variables × 2 truths
+# Organized as: model=[0-3], variable=[0-1], truth=[0-1]
+# Linear index: idx = model*4 + variable*2 + truth
+MODELS=("IFS_ENS" "IFS_ENS" "IFS_ENS" "IFS_ENS" "ArchesWeatherGen" "ArchesWeatherGen" "ArchesWeatherGen" "ArchesWeatherGen" "uCast" "uCast" "uCast" "uCast" "FGN" "FGN" "FGN" "FGN")
+VARS=("t2m" "t2m" "w10" "w10" "t2m" "t2m" "w10" "w10" "t2m" "t2m" "w10" "w10" "t2m" "t2m" "w10" "w10")
+TRUTHS=("ERA5" "HRES_fc0" "ERA5" "HRES_fc0" "ERA5" "HRES_fc0" "ERA5" "HRES_fc0" "ERA5" "HRES_fc0" "ERA5" "HRES_fc0" "ERA5" "HRES_fc0" "ERA5" "HRES_fc0")
 
 MODEL="${MODELS[$IDX]}"
 VAR="${VARS[$IDX]}"
+TRUTH="${TRUTHS[$IDX]}"
 YEAR="${YEAR:-2022}"
-
-# Model-specific truth: IFS_ENS uses HRES_fc0, the AI models use ERA5.
-if [ "${MODEL}" == "IFS_ENS" ]; then
-    TRUTH="${TRUTH:-HRES_fc0}"
-else
-    TRUTH="${TRUTH:-ERA5}"
-fi
 
 RECORD_TAG="${RECORD_TAG:-1979_2021}"
 # ArchesWeatherGen has no 12h lead: keep leads common across all 4 models so
