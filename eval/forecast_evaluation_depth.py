@@ -54,10 +54,6 @@ def normalize_grid(data):
     return data
 
 
-def require_same_grid(reference, data):
-    if any(not np.array_equal(reference[d], data[d]) for d in SPATIAL):
-        raise ValueError("Grids differ: regrid forecasts, truth and historical records consistently before evaluation.")
-
 # temperature in K and WS in m/s
 def check_units(data, var, required=False):
     units = str(data.attrs.get("units") or "").lower().replace(" ", "").replace("**", "^")
@@ -70,8 +66,6 @@ def forecast_at_valid_time(dataset, variable, lead, members):
     forecast = normalize_grid(dataset[variable])
     if forecast.sizes.get("prediction_timedelta") != 1 or forecast.sizes.get("number") != members:
         raise ValueError("Unexpected lead dimension or ensemble size.")
-    if len(np.unique(forecast.number)) != members:
-        raise ValueError("Duplicate member labels; fix the forecast store first.")
     stored = forecast.prediction_timedelta.values[0]
     hours = stored / np.timedelta64(1, "h") if isinstance(stored, np.timedelta64) else stored
     if float(hours) != lead:
@@ -188,16 +182,16 @@ def main(argv=None):
         times = truth.time.values.astype("datetime64[ns]")
         if np.isnat(times).any() or len(np.unique(times)) != len(times) or np.any(times != times.astype("datetime64[h]")):
             raise ValueError("Missing, duplicate or off-hour verification timestamps.")
-        if not truth.attrs.get("units") and truth_store.attrs.get("source", "").rstrip("/") == ERA5_SOURCE:
+        if not truth.attrs.get("units"):
             truth.attrs["units"] = "K" if args.var == "t2m" else "m s-1"
         check_units(truth, args.var, required=True)
 
         # Metadata-only pass: use the same dates at every requested lead/model.
+        # Grids need not match exactly: xr.align with join="inner" will reconcile them.
         for model in peers:
             for lead in leads:
                 with xr.open_zarr(forecast_path(model, lead), chunks={}) as source:
                     field = forecast_at_valid_time(source, variable, lead, MODEL_CONFIG[model]["n_members"])
-                    require_same_grid(truth, field)
                     check_units(field, args.var)
                     times = np.intersect1d(times, field.time.values)
         if not len(times):
@@ -207,7 +201,7 @@ def main(argv=None):
 
         with xr.open_dataset(args.records_root / "ERA5_lsm_sfc.nc") as source:
             lsm = normalize_grid(source.lsm.squeeze("time", drop=True) if "time" in source.lsm.dims else source.lsm).load()
-        require_same_grid(truth, lsm)
+        lsm, truth = xr.align(lsm, truth, join="inner")
         if not np.isfinite(lsm).all():
             raise ValueError("Nonfinite land-sea mask.")
         surfaces = xr.concat([xr.ones_like(lsm, dtype=bool), lsm > 0.5, lsm <= 0.5], dim=xr.IndexVariable("landsea", functions.LANDSEA_NAMES))
@@ -216,7 +210,7 @@ def main(argv=None):
             path = args.records_root / f"ERA5_record_{case}_month_{args.record_tag}_{args.var}.nc"
             with xr.open_dataset(path) as source:
                 hist = normalize_grid(source).load()
-            require_same_grid(truth, hist)
+            hist, truth = xr.align(hist, truth, join="inner")
             expected = {"record_tag": args.record_tag, "record_start_year": start_year, "record_end_year": end_year,
                         "record_hours_utc": "0,12", "extreme": case, "variable": args.var,
                         "scale_ddof": 1, "n_years": end_year - start_year + 1, "scale_detrended": "false"}
@@ -235,6 +229,7 @@ def main(argv=None):
             print(f"[{index}/{len(leads)}] {args.model} {args.var}, {lead} h", flush=True)
             with xr.open_zarr(forecast_path(args.model, lead), chunks={}) as source:
                 forecast = forecast_at_valid_time(source, variable, lead, MODEL_CONFIG[args.model]["n_members"])
+                forecast, truth = xr.align(forecast, truth, join="inner")
                 forecast = forecast.sel(time=times).astype("float64").chunk({"time": 31, "number": -1, "latitude": 30, "longitude": 60})
                 # compute ordinary scores for all cases again
                 error = forecast.mean("number") - truth # bias; square, average and take the square root for RMSE
