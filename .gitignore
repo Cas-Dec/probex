@@ -14,5 +14,9 @@ docs/
 *.fdb_latexmk
 *.fls
 *.log
+CLAUDE.md
+PROJECT_STATUS.md
 manuscript/*
 scripts/manuscript/*
+analysis/gencast/
+analysis/perturbed_truth/

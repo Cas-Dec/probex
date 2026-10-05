@@ -121,7 +121,7 @@ parser.add_argument("--end-year", type=int, default=2021,
                     help="Last year in climatology window.")
 parser.add_argument("--hours", type=str, default="0,12",
                     help="Comma-separated UTC hours used for climatology, e.g. '0,12'.")
-parser.add_argument("--lat-min", type=float, default=-90.0,
+parser.add_argument("--lat-min", type=float, default=-60.0,
                     help="Southern latitude bound retained in record files.")
 parser.add_argument("--lat-max", type=float, default=90.0,
                     help="Northern latitude bound retained in record files.")
@@ -282,21 +282,30 @@ for index, ((extreme, var_short, _), record) in enumerate(zip(record_tasks, comp
         out_root
         / f"ERA5_record_{extreme}_month_{args.record_tag}_{var_short}.nc"
     )
-    if args.with_scale and record_file.exists():
-        with xr.open_dataarray(record_file) as existing:
-            try:
-                xr.testing.assert_equal(record.transpose(*existing.dims), existing)
-            except AssertionError as error:
-                raise ValueError(
-                    f"Recomputed record differs from {record_file}. "
-                    "Check the source, baseline, hours and grid before using its scale."
-                ) from error
-        print(f"  Verified existing {record_file}")
-    else:
-        record.to_netcdf(record_file)
-        print(f"  Wrote {record_file}")
 
     if args.with_scale:
+        # When computing scales, verify existing record-only file matches if present
+        if record_file.exists():
+            try:
+                with xr.open_dataarray(record_file) as existing:
+                    xr.testing.assert_equal(record.transpose(*existing.dims), existing)
+                print(f"  Verified existing {record_file}")
+            except ValueError:
+                # File exists but is a Dataset (record+scale), try loading record variable
+                try:
+                    with xr.open_dataset(record_file) as ds_existing:
+                        if "record" in ds_existing:
+                            xr.testing.assert_equal(record.transpose(*ds_existing["record"].dims), ds_existing["record"])
+                            print(f"  Verified existing {record_file} (record variable)")
+                        else:
+                            raise ValueError(f"Existing {record_file} does not contain 'record' variable")
+                except AssertionError as error:
+                    raise ValueError(
+                        f"Recomputed record differs from {record_file}. "
+                        "Check the source, baseline, hours and grid before using its scale."
+                    ) from error
+
+        # Write record+scale as a single Dataset with same filename
         scale = computed_scales[index].rename({"latitude": "lat", "longitude": "lon"})
         units = ds[VARIABLES[var_short]].attrs.get("units", "K" if var_short == "t2m" else "m s-1")
         pair = xr.Dataset({
@@ -319,15 +328,18 @@ for index, ((extreme, var_short, _), record) in enumerate(zip(record_tasks, comp
             "units": units,
             "ddof": 1,
         })
-        pair_file = out_root / f"ERA5_record_scale_{extreme}_month_{args.record_tag}_{var_short}.nc"
-        partial = pair_file.with_suffix(".nc.partial")
+        partial = record_file.with_suffix(".nc.partial")
         pair.to_netcdf(
             partial,
             engine="netcdf4",
             encoding={name: {"zlib": True, "complevel": 4, "shuffle": True} for name in pair.data_vars},
         )
-        os.replace(partial, pair_file)
-        print(f"  Wrote {pair_file} (record, scale; {pair_file.stat().st_size / 1e6:.2f} MB)")
+        os.replace(partial, record_file)
+        print(f"  Wrote {record_file} (record+scale; {record_file.stat().st_size / 1e6:.2f} MB)")
+    else:
+        # Without scale, write record-only as DataArray
+        record.to_netcdf(record_file)
+        print(f"  Wrote {record_file}")
 
 print("\nPreparing land-sea mask...")
 if "land_sea_mask" in ds:

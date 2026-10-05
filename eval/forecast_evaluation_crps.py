@@ -143,12 +143,19 @@ lsm = lsm.sortby("latitude")
 lsm = lsm.sel(no_Antarctic)
 
 print("Loading records...")
-record_max = xr.open_dataarray(record_max_file)
+# Load records - handle both DataArray (old format) and Dataset with 'record' variable (new format with scales)
+try:
+    record_max = xr.open_dataarray(record_max_file)
+except ValueError:
+    record_max = xr.open_dataset(record_max_file)['record']
 record_max = record_max.rename({"lat": "latitude", "lon": "longitude"})
 record_max = record_max.sel(no_Antarctic)
 
 if var == "t2m":
-    record_min = xr.open_dataarray(record_min_file)
+    try:
+        record_min = xr.open_dataarray(record_min_file)
+    except ValueError:
+        record_min = xr.open_dataset(record_min_file)['record']
     record_min = record_min.rename({"lat": "latitude", "lon": "longitude"})
     record_min = record_min.sel(no_Antarctic)
 else: record_min = None # for wind speeds this is irrelevant

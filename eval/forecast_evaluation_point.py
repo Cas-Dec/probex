@@ -170,7 +170,11 @@ lsm = lsm.sel(no_Antarctic)
 
 
 print("Loading records...")
-record_max = xr.open_dataarray(record_max_file)
+# Load records - handle both DataArray (old format) and Dataset with 'record' variable (new format with scales)
+try:
+    record_max = xr.open_dataarray(record_max_file)
+except ValueError:
+    record_max = xr.open_dataset(record_max_file)['record']
 
 record_max = record_max.rename({"lat": "latitude", "lon": "longitude"})
 

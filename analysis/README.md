@@ -1,82 +1,77 @@
-# ERA5 Records Analysis
+# Analysis
 
-This directory contains scripts for analyzing ERA5 monthly record climatologies.
+This directory contains analysis scripts for the `probex` project, organized by analysis type.
 
-## Scripts
+## Directory Structure
 
-### `compare_era5_records.py`
+```
+analysis/
+├── 2022_records/             # Visualization and verification comparison for 2022 extremes
+│   ├── README.md
+│   ├── plot_month_2022_records.py
+│   ├── plot_monthly_records.py
+│   ├── compare_era5_hresfc0_verification.py
+│   └── results/              # Output figures organized by variable/case
+│
+├── records_2018_vs_2021/     # ERA5 record climatology comparisons
+│   ├── README.md
+│   ├── compare_era5_records.py
+│   └── results/              # Comparison figures and summaries
+│
+├── gencast/                  # GenCast vs GenCast-mini comparison (not part of main body, gitignored)
+│   ├── README.md
+│   ├── compare_gencast_mini.py
+│   └── results/
+│
+├── perturbed_truth/          # Verification dataset sensitivity analysis (not part of main body, gitignored)
+│   ├── README.md
+│   ├── run_all_era5.sh
+│   ├── compare_pipelines.py
+│   ├── create_comparison_plots.py
+│   └── results/
+```
 
-Compares ERA5 records between two time periods (e.g., 1979-2018 vs 1979-2022) to identify where and when new monthly extremes occurred.
+## Analysis Categories
 
-**Usage:**
+### 1. 2022 Records Analysis ([2022_records/](2022_records/))
+
+**Purpose**: Visualize and compare 2022 record-breaking extremes using ERA5 or HRES-fc0 as verification.
+
+**Key capabilities**:
+- Monthly record visualization (4-panel: historical records, 2022 exceedances, variability, depth)
+- ERA5 vs HRES-fc0 verification comparison (confusion matrix, scatter, spatial bias)
+
+**Key finding**: HRES-fc0 flags ~60% more record-breaking events than ERA5 in 2022.
+
+See [2022_records/README.md](2022_records/README.md) for details.
+
+### 2. ERA5 Records Comparison ([records_2018_vs_2021/](records_2018_vs_2021/))
+
+**Purpose**: Compare ERA5 monthly record climatologies across different time periods (e.g., 1979-2018 vs 1979-2021) to identify new record-breaking activity.
+
+**Key findings** (1979-2018 vs 1979-2021):
+- Heat records occurred ~6.8× more frequently than cold records (16.15% vs 2.38% of grid-months)
+- Wind records: 8.05% of grid-months
+- Peak months: August for heat, March for cold, May for wind
+
+See [records_2018_vs_2021/README.md](records_2018_vs_2021/README.md) for details.
+
+## Quick Start
+
+### ERA5 vs HRES-fc0 comparison
 ```bash
-python analysis/compare_era5_records.py \
+# Local run
+bash bash_scripts/run_compare_verification.sh t2m 1979_2021
+
+# HPC submission
+qsub -v VAR=t2m job_scripts/submit_compare_verification.pbs
+```
+
+### Record climatology comparison
+```bash
+python analysis/records_2018_vs_2021/compare_era5_records.py \
     --tag1 1979_2018 \
-    --tag2 1979_2022 \
+    --tag2 1979_2021 \
     --records-dir /data/gent/vo/000/gvo00090/HEAT/Data/wb2 \
-    --output-dir results/record_comparison \
-    --dpi 150
+    --output-dir analysis/records_2018_vs_2021/record_comparison_2019_2021
 ```
-
-**Arguments:**
-- `--tag1`: Baseline period tag (default: `1979_2018`)
-- `--tag2`: Comparison period tag (default: `1979_2022`)
-- `--records-dir`: Directory containing ERA5 record NetCDF files (default: HEAT data location)
-- `--output-dir`: Output directory for figures and summary (default: `results/record_comparison`)
-- `--dpi`: Figure resolution (default: 150)
-
-**Outputs:**
-
-For each variable (t2m, w10) and record type (max, min):
-
-1. **Multi-panel figure** showing:
-   - Spatial map: Number of new records per grid cell (0-12 months)
-   - Bar chart: Percentage of cells with new records by month
-   - Histogram: Distribution of magnitude changes where new records occurred
-   - Spatial map: Mean magnitude of change per grid cell
-
-2. **Text summary** with statistics for all variables and record types
-
-**Example output:**
-```
-results/record_comparison/
-├── record_comparison_1979_2018_vs_1979_2022_summary.txt
-├── record_comparison_t2m_max_1979_2018_vs_1979_2022.png
-├── record_comparison_t2m_min_1979_2018_vs_1979_2022.png
-└── record_comparison_w10_max_1979_2018_vs_1979_2022.png
-```
-
-## Data Requirements
-
-The script expects ERA5 record files in the format:
-```
-ERA5_record_{max|min}_month_{tag}_{var}.nc
-```
-
-Where:
-- `{max|min}`: Record type
-- `{tag}`: Time period tag (e.g., `1979_2018`, `1979_2022`)
-- `{var}`: Variable name (`t2m` for 2m temperature, `w10` for 10m wind speed)
-
-Files should contain monthly climatological extremes on a regular lat/lon grid.
-
-## Key Findings (1979-2018 vs 1979-2022)
-
-### 2m Temperature (t2m)
-- **Heat records (max):** 18.23% of grid-months experienced new records (63,543 total)
-  - Peak: July & November (20.65% of cells each)
-  - Mean increase: +0.62°C where records broken
-  - Largest increase: +18.12°C
-
-- **Cold records (min):** 3.88% of grid-months experienced new records (13,519 total)
-  - Peak: June (4.62%)
-  - Mean decrease: -0.69°C where records broken
-  - Largest decrease: -11.03°C
-
-### 10m Wind Speed (w10)
-- **Wind records (max):** 10.59% of grid-months experienced new records (36,894 total)
-  - Peak: December (12.29%)
-  - Mean increase: +0.92 m/s where records broken
-  - Largest increase: +12.74 m/s
-
-**Notable:** Heat records occurred ~5× more frequently than cold records during 2019-2022, consistent with global warming trends.

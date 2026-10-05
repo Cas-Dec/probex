@@ -155,8 +155,8 @@ lsm = lsm.sel(no_Antarctic)
 
 
 print("Loading records...")
-record_max = xr.open_dataarray(record_max_file)
-
+# Load records from dataset (contains 'record' and 'scale' variables)
+record_max = xr.open_dataset(record_max_file)['record']
 record_max = record_max.rename({"lat": "latitude", "lon": "longitude"})
 
 record_max = record_max.assign_coords(
@@ -169,7 +169,7 @@ records = {"max": record_max}
 
 if var == "t2m":
 
-    record_min = xr.open_dataarray(record_min_file)
+    record_min = xr.open_dataset(record_min_file)['record']
     record_min = record_min.rename({"lat": "latitude", "lon": "longitude"})
     record_min = record_min.assign_coords(
         longitude=(((record_min.longitude + 180) % 360) - 180)
