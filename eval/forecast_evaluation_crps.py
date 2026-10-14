@@ -275,6 +275,9 @@ print("\nCombining and saving outputs...")
 for case in cases: # max all and min (only for t2m)
     crps = xr.concat(crps_by_case[case], dim="leadtime").sortby("leadtime") # crps: leadtime, season, landsea
     stat = xr.concat(stat_by_case[case], dim="leadtime").sortby("leadtime")
+    # "stat" clashes with the stat coordinate, which makes xarray fall back to
+    # __xarray_dataarray_variable__ on disk; give it its own name instead.
+    stat = stat.rename("CRPS_stat")
 
     #crps = crps.rename("CRPS")
     # add metadata
@@ -307,7 +310,7 @@ for case in rtw_cases:
     rtwstat = xr.concat(
         rtwstat_by_case[case],
         dim="leadtime",
-    ).sortby("leadtime")
+    ).sortby("leadtime").rename("rtwCRPS_stat")
 
     for output in [rtwcrps, rtwstat]:
         output.attrs["verification_target"] = truth
