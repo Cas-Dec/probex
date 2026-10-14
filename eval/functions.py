@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import os
 from datetime import datetime
+from pathlib import Path
 
 import dask
 import numpy as np
@@ -22,29 +24,58 @@ SEASON_MONTHS = [
 
 LANDSEA_NAMES = ["all", "land", "sea"]
 
+MODEL_CONFIG = {
+    "GenCast": {"leads": list(range(12, 241, 12)), "n_members": 50, "resolution_tag": "0p25"}, # for now at least...
+    "GenCast-mini": {"leads": [12, 48, 120, 168, 240], "n_members": 32, "resolution_tag": "1p50"},
+    "IFS_ENS": {"leads": [12, 48, 120, 168, 240], "n_members": 50, "resolution_tag": "1p50"},
+    "ArchesWeatherGen": {"leads": [48, 120, 168, 240], "n_members": 64, "resolution_tag": "1p50"},
+    "uCast": {"leads": [12, 48, 120, 168, 240], "n_members": 64, "resolution_tag": "1p50"},
+    "FGN": {"leads": [12, 48, 120, 168, 240], "n_members": 64, "resolution_tag": "1p50"},
+}
 
-def _dedupe_dim(obj: xr.DataArray | xr.Dataset, dim: str):
-    """
-    Ensure a dimension has unique coordinate labels.
+VARIABLES = {"t2m": "2m_temperature", "w10": "10m_wind_speed"}
 
-    If duplicates exist, keep the first occurrence for each coordinate value.
-    """
+NO_ANTARCTIC = dict(latitude=slice(-60, 90), longitude=slice(-180, 180))
 
-    if dim not in obj.dims:
-        return obj
 
-    coord = np.asarray(obj[dim].values)
+def load_dotenv(path):
+    """Set KEY=VALUE lines from a .env file, without overriding the environment."""
+    if path.is_file():
+        for line in path.read_text().splitlines():
+            if line.strip() and not line.lstrip().startswith("#") and "=" in line:
+                key, value = line.split("=", 1)
+                os.environ.setdefault(key.strip(), value.strip().strip("\"'"))
 
-    if coord.ndim != 1:
-        return obj
 
-    _, first_idx = np.unique(coord, return_index=True)
+def eval_paths(root, year, var, truth, record_tag):
+    """Forecast root, truth store, record files per case and land-sea mask, from the .env roots."""
+    heat_data_root = Path(os.environ.get("HEAT_DATA", "data"))
+    forecast_root = Path(os.environ.get("FORECAST_ROOT", str(heat_data_root / "forecasts")))
+    era5_root = Path(os.environ.get("ERA5_ROOT", str(heat_data_root / "wb2")))
+    records_root = Path(os.environ.get("RECORDS_ROOT", str(root / "data" / "era5_records")))
+    if truth == "ERA5":
+        truth_file = Path(os.environ.get(
+            "ERA5_TRUTH_ZARR",
+            str(era5_root / "1959-2023_01_10-6h-240x121_equiangular_with_poles_conservative.zarr"),
+        ))
+    else:
+        truth_file = forecast_root / "HRES_fc0" / f"HRES_fc0_{year}_no_Antarctic_{var}_1p50.zarr"
+    record_files = {case: records_root / f"ERA5_record_{case}_month_{record_tag}_{var}.nc" for case in ["max", "min"]}
+    return forecast_root, truth_file, record_files, records_root / "ERA5_lsm_sfc.nc"
 
-    if len(first_idx) != coord.size:
-        first_idx = np.sort(first_idx)
-        obj = obj.isel({dim: first_idx})
 
-    return obj
+def load_record(path):
+    """Monthly record (month, latitude, longitude) on -180..180 longitude, sorted, no_Antarctic domain."""
+    record = xr.open_dataset(path)["record"]
+    record = record.rename({"lat": "latitude", "lon": "longitude"})
+    record = record.assign_coords(longitude=(((record.longitude + 180) % 360) - 180)).sortby("longitude")
+    return record.sortby("latitude").sel(NO_ANTARCTIC)
+
+
+def lead_hours(forecast):
+    """Lead of a single-lead forecast in hours. Stored as int64 hours (IFS_ENS) or timedelta64 (FGN)."""
+    td = forecast["prediction_timedelta"].values[0]
+    return int(td / np.timedelta64(1, "h")) if isinstance(td, np.timedelta64) else int(td)
 
 
 def normalize_spatial_coords(obj: xr.DataArray | xr.Dataset):
@@ -56,9 +87,8 @@ def normalize_spatial_coords(obj: xr.DataArray | xr.Dataset):
     """
 
     for dim in ["latitude", "longitude"]:
-        obj = _dedupe_dim(obj, dim)
         if dim in obj.dims:
-            obj = obj.sortby(dim)
+            obj = obj.drop_duplicates(dim).sortby(dim)
 
     return obj
 
@@ -245,12 +275,7 @@ def evaluate_point_one_lead(
     """
 
     # Each downloaded file contains exactly one lead.
-    # Handle both int64 (IFS_ENS) and timedelta64 (FGN) types
-    td = forecast["prediction_timedelta"].values[0]
-    if isinstance(td, np.timedelta64):
-        lead_hour = int(td / np.timedelta64(1, "h"))
-    else:
-        lead_hour = int(td)
+    lead_hour = lead_hours(forecast)
     lead_delta = np.timedelta64(lead_hour, "h")
 
     print(f"    Point scores lead {lead_hour:03d}h")

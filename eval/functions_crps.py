@@ -246,12 +246,7 @@ def ENS_CRPS_landseasep(
     stat_names = ["size", "mean", "variance"]
 
     # Each downloaded file contains one lead time.
-    # Handle both int64 (IFS_ENS) and timedelta64 (FGN) types
-    td = forecast["prediction_timedelta"].values[0]
-    if isinstance(td, np.timedelta64):
-        lead_hour = int(td / np.timedelta64(1, "h"))
-    else:
-        lead_hour = int(td)
+    lead_hour = functions.lead_hours(forecast)
     lead_delta = np.timedelta64(lead_hour, "h")
 
     if record_threshold is None:

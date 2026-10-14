@@ -6,7 +6,6 @@ For the no_Antarctic domain, but can be shrunk to smaller domains easily.
 from __future__ import annotations
 import argparse
 import gc # garbage collection, delete the forecasts after each lead to free memory(this can be a problem)
-import os
 from datetime import datetime
 from pathlib import Path
 
@@ -15,34 +14,6 @@ import xarray as xr
 import functions # from zhang, time reshaping
 import functions_crps # adapted from zhang, CRPS evaluation
 
-MODEL_CONFIG = {
-    "GenCast": {
-        "leads": [12, 24, 36, 48, 60, 72, 84, 96, 108, 120,
-                  132, 144, 156, 168, 180, 192, 204, 216, 228, 240],
-        "n_members": 50,
-        "resolution_tag": "0p25",
-    },
-    "IFS_ENS": {
-        "leads": [12, 48, 120, 168, 240],
-        "n_members": 50,
-        "resolution_tag": "1p50",
-    },
-    "ArchesWeatherGen": {
-        "leads": [48, 120, 168, 240],
-        "n_members": 64,
-        "resolution_tag": "1p50",
-    },
-    "uCast": {
-        "leads": [12, 48, 120, 168, 240],
-        "n_members": 64,
-        "resolution_tag": "1p50",
-    },
-    "FGN": {
-        "leads": [12, 48, 120, 168, 240],
-        "n_members": 64,
-        "resolution_tag": "1p50",
-    },
-}
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--year", type=int, default=2020, choices=[2018, 2020, 2022])
@@ -53,35 +24,8 @@ parser.add_argument("--record-tag", type=str, default="1979_2021")
 args = parser.parse_args()
 
 
-def _load_dotenv(path: Path) -> None:
-    try:
-        with path.open() as fh:
-            for line in fh:
-                line = line.strip()
-                if line and not line.startswith("#") and "=" in line:
-                    key, value = line.split("=", 1)
-                    os.environ.setdefault(key.strip(), value.strip())
-    except FileNotFoundError:
-        pass
-
 root = Path.cwd()
-_load_dotenv(root / ".env")
-
-heat_data_root = Path(os.environ.get("HEAT_DATA", "data"))
-
-forecast_root = Path(
-    os.environ.get("FORECAST_ROOT", str(heat_data_root / "forecasts"))
-)
-era5_root = Path(
-    os.environ.get("ERA5_ROOT", str(heat_data_root / "wb2"))
-)
-era5_truth_file = Path(
-    os.environ.get(
-        "ERA5_TRUTH_ZARR",
-        str(era5_root / "1959-2023_01_10-6h-240x121_equiangular_with_poles_conservative.zarr"),
-    )
-)
-records_root = Path(os.environ.get("RECORDS_ROOT", str(root / "data" / "era5_records")))
+functions.load_dotenv(root / ".env")
 
 year = args.year
 var = args.var
@@ -89,20 +33,16 @@ model = args.model
 truth = args.truth
 record_tag = args.record_tag
 
-config = MODEL_CONFIG[model]
+config = functions.MODEL_CONFIG[model]
 leads = config["leads"]
 n_members = config["n_members"]
 resolution_tag = config["resolution_tag"]
 
-if var == "t2m":
-    variable = "2m_temperature"
-elif var == "w10":
-    variable = "10m_wind_speed"
+variable = functions.VARIABLES[var]
 
 eval_start = datetime(year, 1, 1, 0)
 eval_end = datetime(year, 12, 31, 18)
 
-no_Antarctic = dict(latitude=slice(-60, 90), longitude=slice(-180, 180))
 cases = ["max", "all"]
 if var == "t2m":
     cases.append("min")
@@ -110,14 +50,7 @@ if var == "t2m":
 out_dir = root / "results" / model / "CRPS"
 out_dir.mkdir(parents=True, exist_ok=True)
 
-if truth == "ERA5":
-    truth_file = era5_truth_file
-else:
-    truth_file = forecast_root / "HRES_fc0" / f"HRES_fc0_{year}_no_Antarctic_{var}_1p50.zarr"
-
-record_max_file = records_root / f"ERA5_record_max_month_{record_tag}_{var}.nc"
-record_min_file = records_root / f"ERA5_record_min_month_{record_tag}_{var}.nc"
-lsm_file = records_root / "ERA5_lsm_sfc.nc" #land sea mark (0 and 1s; from zhang)
+forecast_root, truth_file, record_files, lsm_file = functions.eval_paths(root, year, var, truth, record_tag)
 
 print("--------------------------")
 print("Fair CRPS and record-threshold weighted CRPS evaluation")
@@ -133,32 +66,18 @@ print("\nLoading truth...")
 truth_da = xr.open_zarr(truth_file, chunks={})[variable]
 truth_da = truth_da.assign_coords(longitude=(((truth_da.longitude + 180) % 360) - 180)).sortby("longitude")
 truth_da = truth_da.sel(time=slice(eval_start, eval_end))
-truth_da = truth_da.sel(no_Antarctic)
+truth_da = truth_da.sel(functions.NO_ANTARCTIC)
 
 print("Loading land-sea mask...")
 lsm = xr.open_dataset(lsm_file)["lsm"]
 lsm = lsm.isel(time=0, drop=True) # time dimension is just a dummy dimension, we can drop it 
 lsm = lsm.assign_coords(longitude=(((lsm.longitude + 180) % 360) - 180)).sortby("longitude")
 lsm = lsm.sortby("latitude")
-lsm = lsm.sel(no_Antarctic)
+lsm = lsm.sel(functions.NO_ANTARCTIC)
 
 print("Loading records...")
-# Load records - handle both DataArray (old format) and Dataset with 'record' variable (new format with scales)
-try:
-    record_max = xr.open_dataarray(record_max_file)
-except ValueError:
-    record_max = xr.open_dataset(record_max_file)['record']
-record_max = record_max.rename({"lat": "latitude", "lon": "longitude"})
-record_max = record_max.sel(no_Antarctic)
-
-if var == "t2m":
-    try:
-        record_min = xr.open_dataarray(record_min_file)
-    except ValueError:
-        record_min = xr.open_dataset(record_min_file)['record']
-    record_min = record_min.rename({"lat": "latitude", "lon": "longitude"})
-    record_min = record_min.sel(no_Antarctic)
-else: record_min = None # for wind speeds this is irrelevant
+record_max = functions.load_record(record_files["max"])
+record_min = functions.load_record(record_files["min"]) if var == "t2m" else None # for wind speeds this is irrelevant
 
 print("Transforming verification time...") # from Zhang2026; time idx to year, month, day, hour idx
 # unstack the original time dimension into month and hour, then select only 00 and 12 UTC hours
@@ -193,7 +112,7 @@ for i, lead_hour in enumerate(leads, start=1):
     print("=" * 80)
 
     forecast = xr.open_zarr(forecast_file, chunks={})[variable]
-    forecast = forecast.sel(no_Antarctic)
+    forecast = forecast.sel(functions.NO_ANTARCTIC)
     
     print("START max records") # compute crps for current lead time, only for mask_max=1
     crps, stat = functions_crps.ENS_CRPS_landseasep(

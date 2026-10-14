@@ -401,12 +401,7 @@ def evaluate_occurrence_one_lead(
         min = low records
     """
 
-    # Handle both int64 (IFS_ENS) and timedelta64 (FGN) types
-    td = forecast["prediction_timedelta"].values[0]
-    if isinstance(td, np.timedelta64):
-        lead_hour = int(td / np.timedelta64(1, "h"))
-    else:
-        lead_hour = int(td)
+    lead_hour = functions.lead_hours(forecast)
     lead_delta = np.timedelta64(lead_hour, "h")
 
     print(f"    Occurrence lead {lead_hour:03d}h")

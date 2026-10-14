@@ -19,6 +19,7 @@ import argparse
 import hashlib
 import json
 import os
+import socket
 from datetime import datetime
 from pathlib import Path
 
@@ -31,15 +32,8 @@ import functions
 import functions_crps
 import functions_occurrence
 
-MODEL_CONFIG = {
-    "GenCast": {"leads": list(range(12, 241, 12)), "n_members": 50, "resolution_tag": "0p25"}, # for now at least...
-    "GenCast-mini": {"leads": [12, 48, 120, 168, 240], "n_members": 32, "resolution_tag": "1p50"},
-    "IFS_ENS": {"leads": [12, 48, 120, 168, 240], "n_members": 50, "resolution_tag": "1p50"},
-    "ArchesWeatherGen": {"leads": [48, 120, 168, 240], "n_members": 64, "resolution_tag": "1p50"},
-    "uCast": {"leads": [12, 48, 120, 168, 240], "n_members": 64, "resolution_tag": "1p50"},
-    "FGN": {"leads": [12, 48, 120, 168, 240], "n_members": 64, "resolution_tag": "1p50"},
-}
-VARIABLES = {"t2m": "2m_temperature", "w10": "10m_wind_speed"}
+MODEL_CONFIG = functions.MODEL_CONFIG
+VARIABLES = functions.VARIABLES
 SPATIAL = ["latitude", "longitude"]
 REDUCE_DIMS = ["time", *SPATIAL]
 ERA5_SOURCE = "gs://weatherbench2/datasets/era5/1959-2023_01_10-6h-240x121_equiangular_with_poles_conservative.zarr"
@@ -69,9 +63,8 @@ def forecast_at_valid_time(dataset, variable, lead, members):
     forecast = normalize_grid(dataset[variable])
     if forecast.sizes.get("prediction_timedelta") != 1 or forecast.sizes.get("number") != members:
         raise ValueError("Unexpected lead dimension or ensemble size.")
-    stored = forecast.prediction_timedelta.values[0]
-    hours = stored / np.timedelta64(1, "h") if isinstance(stored, np.timedelta64) else stored
-    if float(hours) != lead:
+    hours = functions.lead_hours(forecast)
+    if hours != lead:
         raise ValueError(f"Stored lead {hours} does not match {lead} h.")
     forecast = forecast.isel(prediction_timedelta=0, drop=True)
     if set(forecast.dims) != {"time", "number", *SPATIAL}:
@@ -82,30 +75,13 @@ def forecast_at_valid_time(dataset, variable, lead, members):
     return forecast.assign_coords(time=times).sortby("time")
 
 
-def validate_forecast_consistency(forecast, model, variable, lead, expected_members):
+def validate_forecast_consistency(forecast, model, variable, lead):
     """
-    Strictly validate forecast format consistency.
-
-    Only two differences allowed:
-    1. AWG/uCast may have extra -60°S latitude row
-    2. IFS_ENS has 50 members, others 64
-
-    All other differences are RED FLAGS.
+    Strictly validate the forecast grid and time stamps. Dimensions, member count,
+    finite coordinates and unique times are already checked by normalize_grid and
+    forecast_at_valid_time. AWG/uCast may have an extra -60°S latitude row.
     """
     issues = []
-
-    # Check dimensions
-    expected_dims = {"time", "number", "latitude", "longitude"}
-    if set(forecast.dims) != expected_dims:
-        issues.append(f"Wrong dimensions: {set(forecast.dims)} != {expected_dims}")
-
-    # Check member count
-    actual_members = forecast.sizes["number"]
-    if actual_members != expected_members:
-        issues.append(
-            f"Wrong number of members: {actual_members} != {expected_members}\n"
-            f"  Expected {expected_members} for {model}"
-        )
 
     # Check latitude range
     lat = forecast.latitude.values
@@ -151,22 +127,8 @@ def validate_forecast_consistency(forecast, model, variable, lead, expected_memb
             f"  Expected uniform: {expected_spacing}°"
         )
 
-    # Check for NaN in coordinates
-    if not np.isfinite(lat).all():
-        issues.append("NaN or Inf in latitude coordinates")
-
-    if not np.isfinite(lon).all():
-        issues.append("NaN or Inf in longitude coordinates")
-
-    # Check time coordinates
-    times = forecast.time.values
-    if np.isnat(times).any():
-        issues.append("NaT (Not-a-Time) in time coordinates")
-
-    if len(np.unique(times)) != len(times):
-        issues.append("Duplicate time values")
-
     # Check that times are on-hour (no minutes/seconds)
+    times = forecast.time.values
     times_as_hour = times.astype('datetime64[h]')
     if not (times == times_as_hour).all():
         issues.append("Time coordinates not on exact hours")
@@ -194,23 +156,15 @@ def select_viable_depths(truth, history, case, candidate_depths, min_events=30):
     scale = functions_occurrence.record_by_time(history.scale, truth.time.values)
 
     sign = 1 if case == "max" else -1
-    viable_depths = []
-    sample_counts = {}
-
-    for k in candidate_depths:
-        threshold = record + sign * k * scale
-        event = sign * (truth - threshold) > 0
-
-        # Count valid events (where scale > 0)
-        valid_mask = (scale > 0) & truth.notnull()
-        n_events = int((event & valid_mask).sum().compute().item())
-
-        sample_counts[k] = n_events
-
-        if n_events >= min_events:
-            viable_depths.append(k)
-        else:
-            print(f"  Excluding depth {k:.2f}σ: only {n_events} events (< {min_events} required)")
+    k = xr.DataArray(candidate_depths, dims="depth", coords={"depth": candidate_depths})
+    event = sign * (truth - (record + sign * k * scale)) > 0
+    # One pass over truth for all depths; count valid events (where scale > 0)
+    counts = (event & (scale > 0) & truth.notnull()).sum(REDUCE_DIMS).compute()
+    sample_counts = dict(zip(candidate_depths, counts.values.tolist()))
+    viable_depths = [k for k, n in sample_counts.items() if n >= min_events]
+    for k, n in sample_counts.items():
+        if n < min_events:
+            print(f"  Excluding depth {k:.2f}σ: only {n} events (< {min_events} required)")
 
     if not viable_depths:
         raise ValueError(
@@ -363,6 +317,19 @@ def update_fingerprint_registry(registry, key, fingerprint, metadata):
     return registry
 
 
+def sync_fingerprints(registry_path, fingerprints, metadata, write=False):
+    """Check fingerprints against the shared registry; with write=True also store new ones.
+    Array tasks share the file, so re-read it right before writing and replace it atomically."""
+    registry = load_fingerprint_registry(registry_path)
+    for key, fingerprint in fingerprints.items():
+        update_fingerprint_registry(registry, key, fingerprint, metadata)
+    if write:
+        # shortcut: no file lock, two tasks writing in the same instant can drop one new entry; it is re-registered on the next run.
+        partial = registry_path.with_name(f"{registry_path.name}.{socket.gethostname()}.{os.getpid()}.partial")
+        partial.write_text(json.dumps(registry, indent=2))
+        os.replace(partial, registry_path)
+
+
 def depth_scores(forecast, truth, history, surfaces, depths, case, base):
     """ This is the core of the depth evaluation, ie for every cell and verification time, we compute the threshold R +/- k*s
     where k is threshold depth, R is the historical record and s is the historical scale.
@@ -417,11 +384,7 @@ def depth_scores(forecast, truth, history, surfaces, depths, case, base):
 
 def main(argv=None):
     root = Path.cwd()
-    if (root / ".env").is_file():
-        for line in (root / ".env").read_text().splitlines():
-            if line.strip() and not line.lstrip().startswith("#") and "=" in line:
-                key, value = line.split("=", 1)
-                os.environ.setdefault(key.strip(), value.strip().strip("\"'"))
+    functions.load_dotenv(root / ".env")
 
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--year", type=int, default=2022)
@@ -469,7 +432,7 @@ def main(argv=None):
             raise ValueError("Missing, duplicate or off-hour verification timestamps.")
         if not truth.attrs.get("units"):
             truth.attrs["units"] = "K" if args.var == "t2m" else "m s-1"
-        check_units(truth, args.var, required=True)
+        check_units(truth, args.var)
 
         # Metadata-only pass: use the same dates at every requested lead/model.
         # Grids need not match exactly: xr.align with join="inner" will reconcile them.
@@ -477,7 +440,7 @@ def main(argv=None):
             for lead in leads:
                 with xr.open_zarr(forecast_path(model, lead), chunks={}) as source:
                     field = forecast_at_valid_time(source, variable, lead, MODEL_CONFIG[model]["n_members"])
-                    validate_forecast_consistency(field, model, variable, lead, MODEL_CONFIG[model]["n_members"])
+                    validate_forecast_consistency(field, model, variable, lead)
                     check_units(field, args.var)
                     times = np.intersect1d(times, field.time.values)
         if not len(times):
@@ -506,34 +469,22 @@ def main(argv=None):
                 check_units(hist[name], args.var, required=True)
                 if set(hist[name].dims) != {"month", *SPATIAL} or not np.isfinite(hist[name]).all():
                     raise ValueError(f"Invalid dimensions or nonfinite historical {name}.")
-            # STRICT scale validation - any scale <= 0 is a RED FLAG
+            # create_era5_records.py already refuses scale <= 0; this guards against older files.
             if (hist.scale <= 0).any():
-                n_invalid = int((hist.scale <= 0).sum().item())
-                total = hist.scale.size
-                pct = 100 * n_invalid / total
-                # Get locations of invalid scales
-                invalid_mask = hist.scale.values <= 0
-                invalid_locs = np.where(invalid_mask)
-                # Sample first few invalid locations
-                n_sample = min(5, len(invalid_locs[0]))
-                sample_info = []
-                for i in range(n_sample):
-                    month_idx = invalid_locs[0][i]
-                    lat_idx = invalid_locs[1][i]
-                    lon_idx = invalid_locs[2][i]
-                    sample_info.append(
-                        f"    month={month_idx+1}, "
-                        f"lat={hist.latitude.values[lat_idx]:.2f}, "
-                        f"lon={hist.longitude.values[lon_idx]:.2f}, "
-                        f"scale={hist.scale.values[month_idx, lat_idx, lon_idx]:.6f}"
-                    )
-                raise ValueError(
-                    f"CRITICAL: Found {n_invalid}/{total} points ({pct:.2f}%) with scale <= 0!\n"
-                    f"This indicates a fundamental problem with the historical records.\n"
-                    f"First few invalid locations:\n" + "\n".join(sample_info) + "\n"
-                    f"Check the record creation process: download/create_era5_records.py"
-                )
+                raise ValueError(f"Historical scale <= 0 in {path}; rebuild it with download/create_era5_records.py")
             histories[case] = hist
+
+        # Check the record fingerprints now, so a mismatch fails before hours of compute.
+        fingerprints = {}
+        for case, hist in histories.items():
+            reference = hashlib.sha256()
+            for field in [hist.record, hist.scale, lsm, hist.latitude, hist.longitude]:
+                reference.update(np.ascontiguousarray(field.values, dtype="float64").tobytes())
+            fingerprints[case] = reference.hexdigest()
+        fingerprint_registry_path = args.out_root / "depth_fingerprints.json"
+        registry_entries = {f"{args.record_tag}_{args.var}_{case}": fp for case, fp in fingerprints.items()}
+        fingerprint_metadata = {"model": args.model, "truth": args.truth, "year": args.year}
+        sync_fingerprints(fingerprint_registry_path, registry_entries, fingerprint_metadata)
 
         # Adaptive depth selection per case
         print("\nSelecting viable depths based on sample size criterion:")
@@ -551,7 +502,7 @@ def main(argv=None):
             print(f"[{index}/{len(leads)}] {args.model} {args.var}, {lead} h", flush=True)
             with xr.open_zarr(forecast_path(args.model, lead), chunks={}) as source:
                 forecast = forecast_at_valid_time(source, variable, lead, MODEL_CONFIG[args.model]["n_members"])
-                validate_forecast_consistency(forecast, args.model, variable, lead, MODEL_CONFIG[args.model]["n_members"])
+                validate_forecast_consistency(forecast, args.model, variable, lead)
                 forecast, truth = xr.align(forecast, truth, join="inner")
                 forecast = forecast.sel(time=times).astype("float64").chunk({"time": 31, "number": -1, "latitude": 30, "longitude": 60})
                 # compute ordinary scores for all cases again
@@ -573,31 +524,13 @@ def main(argv=None):
                 validate_scores(scores, case)
                 outputs[case].append(scores.drop_vars("invalid_count").expand_dims(leadtime=[lead]))
 
-        # Load fingerprint registry
-        fingerprint_registry_path = args.out_root / "depth_fingerprints.json"
-        registry = load_fingerprint_registry(fingerprint_registry_path)
-
         for case, parts in outputs.items():
             summary = xr.concat(parts, dim="leadtime", join="exact")
             summary = summary.transpose("leadtime", "landsea", "depth")
             event = "cold" if case == "min" else ("heat" if args.var == "t2m" else "wind")
-            hist = histories[case]
-            reference = hashlib.sha256()
-            for field in [hist.record, hist.scale, lsm, hist.latitude, hist.longitude]:
-                reference.update(np.ascontiguousarray(field.values, dtype="float64").tobytes())
-
-            # Validate/register fingerprint
-            fingerprint_key = f"{args.record_tag}_{args.var}_{case}"
-            fingerprint_metadata = {
-                "model": args.model,
-                "truth": args.truth,
-                "year": args.year,
-            }
-            registry = update_fingerprint_registry(registry, fingerprint_key, reference.hexdigest(), fingerprint_metadata)
-
             attrs = {"model": args.model, "event": event, "variable": args.var, "year": args.year,
                      "verification_target": args.truth, "truth_file": str(truth_file.resolve()),
-                     "record_tag": args.record_tag, "reference_fingerprint": reference.hexdigest(),
+                     "record_tag": args.record_tag, "reference_fingerprint": fingerprints[case],
                      "valid_time_count": len(times), "common_dates_across_leads": "true",
                      "comparison_models": ",".join(peers), "units": "K" if args.var == "t2m" else "m s-1",
                      "min_sample_size": args.min_sample_size,
@@ -614,10 +547,7 @@ def main(argv=None):
             os.replace(partial, output)
             print(f"Saved {output}")
 
-        # Save updated fingerprint registry
-        fingerprint_registry_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(fingerprint_registry_path, 'w') as f:
-            json.dump(registry, f, indent=2)
+        sync_fingerprints(fingerprint_registry_path, registry_entries, fingerprint_metadata, write=True)
         print(f"\n✓ Fingerprint registry updated: {fingerprint_registry_path}")
 
 
