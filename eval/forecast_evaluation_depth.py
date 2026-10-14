@@ -271,6 +271,10 @@ def variable_attrs(name, units, case):
         "rtwcrps_empirical": (units, "record-threshold weighted CRPS over all eligible cases", "empirical (non-fair) rtwCRPS"),
         "brier": ("1", f"Brier score for truth {tail}, over all eligible cases", "fair Brier score"),
         "brier_empirical": ("1", f"Brier score for truth {tail}, over all eligible cases", "empirical (non-fair) Brier score"),
+        "rtwcrps_record_contribution": (units, "Observed-exceedance contribution to all-case rtwCRPS", "fair rtwCRPS"),
+        "rtwcrps_nonrecord_contribution": (units, "Non-exceedance contribution to all-case rtwCRPS", "fair rtwCRPS"),
+        "brier_record_contribution": ("1", "Observed-exceedance contribution to all-case Brier score", "fair Brier score"),
+        "brier_nonrecord_contribution": ("1", "Non-exceedance contribution to all-case Brier score", "fair Brier score"),
         "probability": ("1", f"mean forecast probability of truth {tail}", None),
         "observed_probability": ("1", f"observed frequency of truth {tail} (record_weight / valid_weight)", None),
     }
@@ -378,6 +382,12 @@ def depth_scores(forecast, truth, history, surfaces, depths, case, base):
     # Tail scores use all  cases, including non-exceedances.
     for name, field in tail.items():
         result[name] = xr.where(eligible, field * weight, 0).sum(REDUCE_DIMS, skipna=False) / all_weight
+        if name in {"rtwcrps", "brier"}:
+            # Keep the ALL-case denominator: the two contributions sum to result[name].
+            for subset, mask in [("record", event), ("nonrecord", ~event)]:
+                result[f"{name}_{subset}_contribution"] = (
+                    xr.where(eligible & mask, field * weight, 0).sum(REDUCE_DIMS, skipna=False) / all_weight
+                )
     result["observed_probability"] = result.record_weight / all_weight
     return result
 

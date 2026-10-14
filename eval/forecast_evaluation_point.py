@@ -35,7 +35,7 @@ import functions
 parser = argparse.ArgumentParser()
 parser.add_argument("--year", type=int, default=2020, choices=[2018, 2020, 2022])
 parser.add_argument("--var", type=str, default="t2m", choices=["t2m", "w10"])
-parser.add_argument("--model", type=str, default="GenCast", choices=["GenCast", "IFS_ENS", "ArchesWeatherGen", "uCast", "FGN"])
+parser.add_argument("--model", type=str, default="GenCast", choices=list(functions.MODEL_CONFIG))
 parser.add_argument("--truth", type=str, default="ERA5", choices=["ERA5", "HRES_fc0"])
 parser.add_argument("--record-tag", type=str, default="1979_2021")
 args = parser.parse_args()
