@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Plot saved ProbEx summaries; no forecast downloads or rescoring.
 
-Run from the project root: python plot_land_scores.py
+Run from the project root: python viz/plot_land_scores.py
 Missing point-score files leave labelled empty RMSE panels; other scores plot
 immediately. Run eval/forecast_evaluation_point.py and repeat to fill those panels.
 

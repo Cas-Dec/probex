@@ -14,7 +14,7 @@ import xarray as xr
 COLORS = {"IFS_ENS": "tab:orange", "FGN": "tab:blue", "uCast": "tab:green",
           "ArchesWeatherGen": "tab:purple", "GenCast": "tab:red"}
 
-root = Path(__file__).resolve().parent
+root = Path(__file__).resolve().parent.parent
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument("--results", type=Path, default=root / "results")
 parser.add_argument("--models", nargs="+", default=["IFS_ENS", "FGN"])

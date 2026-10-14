@@ -14,8 +14,8 @@ and 10 m wind. The 2022 comparison uses monthly ERA5 records from
 | Ensemble-mean/median RMSE and bias | `eval/forecast_evaluation_point.py` |
 | Diagnostics grouped by  record margin | `eval/forecast_evaluation_margin.py` |
 | Diagnostics grouped by threshold depths | `eval/forecast_evaluation_depth.py` |
-| Lead-time figures | `plot_land_scores.py` |
-| Depth vs skill figures | `plot_record_depth.py` |
+| Lead-time figures | `viz/plot_land_scores.py` |
+| Depth vs skill figures | `viz/plot_record_depth.py` |
 | ERA5/HRES-fc0 reference-data comparison | `analysis/compare_era5_hresfc0_verification.py` |
 
 
@@ -122,7 +122,7 @@ and similarly for the AI models and W10.
 Then,
 
 ```bash
-python plot_land_scores.py --models IFS_ENS FGN --surface land --truth ERA5
+python viz/plot_land_scores.py --models IFS_ENS FGN --surface land --truth ERA5
 ```
 
 For depth evaluation, 
@@ -149,7 +149,7 @@ for model in IFS_ENS FGN; do
       --depths 0 0.5 1 2
   done
 done
-python plot_record_depth.py --models IFS_ENS FGN --surface land
+python viz/plot_record_depth.py --models IFS_ENS FGN --surface land
 ```
 
 At depth `k`, the threshold is `R + k*s` for heat/wind and `R - k*s` for cold.

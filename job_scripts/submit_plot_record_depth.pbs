@@ -51,13 +51,13 @@ date
 hostname
 
 echo "--- ERA5-verified models: all 4 models (IFS_ENS, ArchesWeatherGen, uCast, FGN) ---"
-"${PROBEX_PYTHON}" plot_record_depth.py \
+"${PROBEX_PYTHON}" viz/plot_record_depth.py \
   --models IFS_ENS ArchesWeatherGen uCast FGN --truth ERA5 \
   --year "${YEAR}" --record-tag "${RECORD_TAG}" \
   --reference IFS_ENS --surface "${SURFACE}"
 
 echo "--- HRES_fc0-verified models: all 4 models (IFS_ENS, ArchesWeatherGen, uCast, FGN) ---"
-"${PROBEX_PYTHON}" plot_record_depth.py \
+"${PROBEX_PYTHON}" viz/plot_record_depth.py \
   --models IFS_ENS ArchesWeatherGen uCast FGN --truth HRES_fc0 \
   --year "${YEAR}" --record-tag "${RECORD_TAG}" \
   --reference IFS_ENS --surface "${SURFACE}"
