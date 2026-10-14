@@ -37,7 +37,10 @@ RECORD_TAG="${RECORD_TAG:-1979_2021}"
 # --compare-models establishes identical verification dates in every run,
 # even though IFS_ENS and the AI models use different truth stores.
 LEADS="${LEADS:-48 120 168 240}"
-DEPTHS="${DEPTHS:-0 0.5 1 2}"
+# Adaptive depth selection with min-sample-size criterion (default: 30 events)
+# Candidate depths will be filtered based on available sample size
+DEPTHS="${DEPTHS:-0 0.25 0.5 0.75 1 1.25 1.5 1.75 2 2.5 3}"
+MIN_SAMPLE_SIZE="${MIN_SAMPLE_SIZE:-30}"
 COMPARE_MODELS="${COMPARE_MODELS:-IFS_ENS ArchesWeatherGen uCast FGN}"
 
 LOG_DIR="${PROJECT_ROOT}/job_scripts/logs"
@@ -52,21 +55,22 @@ export OPENBLAS_NUM_THREADS=1
 export NUMEXPR_NUM_THREADS=1
 
 echo "Running depth eval array task"
-echo "task id        = ${TASK_ID}"
-echo "model          = ${MODEL}"
-echo "variable       = ${VAR}"
-echo "year           = ${YEAR}"
-echo "truth          = ${TRUTH}"
-echo "records        = ${RECORD_TAG}"
-echo "leads          = ${LEADS}"
-echo "depths         = ${DEPTHS}"
-echo "compare-models = ${COMPARE_MODELS}"
-echo "log file       = ${LOG_FILE}"
+echo "task id          = ${TASK_ID}"
+echo "model            = ${MODEL}"
+echo "variable         = ${VAR}"
+echo "year             = ${YEAR}"
+echo "truth            = ${TRUTH}"
+echo "records          = ${RECORD_TAG}"
+echo "leads            = ${LEADS}"
+echo "depths           = ${DEPTHS}"
+echo "min-sample-size  = ${MIN_SAMPLE_SIZE}"
+echo "compare-models   = ${COMPARE_MODELS}"
+echo "log file         = ${LOG_FILE}"
 date
 hostname
 
-echo "Launching: bash bash_scripts/run_eval_depth.sh ${MODEL} ${VAR} ${YEAR} ${TRUTH} ${RECORD_TAG} \"${LEADS}\" \"${DEPTHS}\" \"${COMPARE_MODELS}\""
-bash bash_scripts/run_eval_depth.sh "${MODEL}" "${VAR}" "${YEAR}" "${TRUTH}" "${RECORD_TAG}" "${LEADS}" "${DEPTHS}" "${COMPARE_MODELS}"
+echo "Launching: bash bash_scripts/run_eval_depth.sh ${MODEL} ${VAR} ${YEAR} ${TRUTH} ${RECORD_TAG} \"${LEADS}\" \"${DEPTHS}\" \"${COMPARE_MODELS}\" ${MIN_SAMPLE_SIZE}"
+bash bash_scripts/run_eval_depth.sh "${MODEL}" "${VAR}" "${YEAR}" "${TRUTH}" "${RECORD_TAG}" "${LEADS}" "${DEPTHS}" "${COMPARE_MODELS}" ${MIN_SAMPLE_SIZE}
 echo "Runner exit status: $?"
 
 echo "Finished depth eval array task"

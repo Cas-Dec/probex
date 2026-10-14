@@ -32,8 +32,7 @@ hostname
   --record-tag "${RECORD_TAG}" \
   --start-year "${START_YEAR}" \
   --end-year "${END_YEAR}" \
-  --hours "${HOURS}" \
-  --with-scale
+  --hours "${HOURS}"
 
 echo "Finished ERA5 record climatology creation"
 date

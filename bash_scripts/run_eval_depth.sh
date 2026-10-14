@@ -7,8 +7,9 @@ YEAR="${3:-2022}"
 TRUTH="${4:-ERA5}"
 RECORD_TAG="${5:-1979_2021}"
 LEADS="${6:-48 120 168 240}"
-DEPTHS="${7:-0 0.5 1 2}"
+DEPTHS="${7:-0 0.25 0.5 0.75 1 1.25 1.5 1.75 2 2.5 3}"
 COMPARE_MODELS="${8:-IFS_ENS ArchesWeatherGen uCast FGN}"
+MIN_SAMPLE_SIZE="${9:-30}"
 
 PROJECT_ROOT="${PBS_O_WORKDIR:-$(pwd)}"
 if [[ ! -f "${PROJECT_ROOT}/find_probex_env.sh" && -f "${PROJECT_ROOT}/../find_probex_env.sh" ]]; then
@@ -28,15 +29,16 @@ source "./find_probex_env.sh"
 mkdir -p logs "results/${MODEL}/Depth"
 
 echo "Running Depth evaluation"
-echo "model          = ${MODEL}"
-echo "variable       = ${VAR}"
-echo "year           = ${YEAR}"
-echo "truth          = ${TRUTH}"
-echo "records        = ${RECORD_TAG}"
-echo "leads          = ${LEADS}"
-echo "depths         = ${DEPTHS}"
-echo "compare-models = ${COMPARE_MODELS}"
-echo "workdir        = $(pwd)"
+echo "model            = ${MODEL}"
+echo "variable         = ${VAR}"
+echo "year             = ${YEAR}"
+echo "truth            = ${TRUTH}"
+echo "records          = ${RECORD_TAG}"
+echo "leads            = ${LEADS}"
+echo "depths           = ${DEPTHS}"
+echo "min-sample-size  = ${MIN_SAMPLE_SIZE}"
+echo "compare-models   = ${COMPARE_MODELS}"
+echo "workdir          = $(pwd)"
 date
 hostname
 
@@ -51,6 +53,7 @@ hostname
   --record-tag "${RECORD_TAG}" \
   --leads ${LEADS} \
   --depths ${DEPTHS} \
+  --min-sample-size "${MIN_SAMPLE_SIZE}" \
   --compare-models ${COMPARE_MODELS}
 
 echo "Finished depth-conditioned evaluation"

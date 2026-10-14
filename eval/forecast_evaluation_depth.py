@@ -531,7 +531,7 @@ def main(argv=None):
                     f"CRITICAL: Found {n_invalid}/{total} points ({pct:.2f}%) with scale <= 0!\n"
                     f"This indicates a fundamental problem with the historical records.\n"
                     f"First few invalid locations:\n" + "\n".join(sample_info) + "\n"
-                    f"Check the record creation process: download/create_era5_records.py --with-scale"
+                    f"Check the record creation process: download/create_era5_records.py"
                 )
             histories[case] = hist
 

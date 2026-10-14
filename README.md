@@ -47,17 +47,15 @@ To download ERA5
 python -u download/download_era5_truth_wb2.py --year 2022
 ```
 
-For monthly thresholds alone,
+Records and their local scales are always computed together:
 
 ```bash
 python -u download/create_era5_records.py
 ```
 
-For thresholds **and local scales**, 
-
-```bash
-python -u download/create_era5_records.py --with-scale
-```
+An existing record file is kept if it exactly matches the script's output format
+(variables, grid, dtypes and attributes such as years, hours and source); otherwise it is
+recomputed and overwritten.
 
 The source may be local or `gs://`. No
 full historical ERA5 archive is saved locally during the calculation. Progress counts completed Dask
@@ -68,8 +66,8 @@ Outputs to be found in `RECORDS_ROOT`:
 - `ERA5_record_{max|min}_month_1979_2021_t2m.nc`
 - `ERA5_record_max_month_1979_2021_w10.nc`
 - `ERA5_lsm_sfc.nc`
-- With `--with-scale`: matching `ERA5_record_scale_...nc` files containing
-  `record` and `scale` on `(month, lat, lon)`.
+
+Each record file contains `record` and `scale` on `(month, lat, lon)`.
 
 For each grid cell and calendar month, the scale is the sample standard
 deviation (`ddof=1`) across the 43 yearly monthly maxima or minima -  no detrending is applied.
@@ -82,7 +80,7 @@ bash bash_scripts/run_create_era5_records.sh 1979_2021 1979 2021 0,12
 ```
 
 If you want a different latitude range (eg for visualization), use the Python command directly with
-`--with-scale --lat-min -60`, as described above.
+`--lat-min -60`, as described above.
 
 ### Forecast inputs
 
