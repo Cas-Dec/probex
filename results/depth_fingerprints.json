@@ -1,0 +1,23 @@
+{
+  "1979_2021_t2m_max": {
+    "fingerprint": "e27633e9a2c61a1f078100a8ec1fc2d2cc14d397f5d39817089a8998f1d3fd1d",
+    "date": "2026-10-06T10:31:48.256698",
+    "model": "IFS_ENS",
+    "truth": "HRES_fc0",
+    "year": 2022
+  },
+  "1979_2021_t2m_min": {
+    "fingerprint": "a7ff555bf16de740d797fd78750cbbf09bf4c0e900d60a5177409b9cc4f0f6d2",
+    "date": "2026-10-06T10:31:48.353686",
+    "model": "IFS_ENS",
+    "truth": "HRES_fc0",
+    "year": 2022
+  },
+  "1979_2021_w10_max": {
+    "fingerprint": "7becbc807bcc456ac0ba1b61bdb5b94a2e3e0d54bd465e82cc32bbbbfa96b2fa",
+    "date": "2026-10-06T10:40:57.592495",
+    "model": "IFS_ENS",
+    "truth": "ERA5",
+    "year": 2022
+  }
+}
