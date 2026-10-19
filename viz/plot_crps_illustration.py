@@ -1,4 +1,10 @@
 """Illustrate CRPS and record-threshold weighted CRPS with Matplotlib.
+
+Place this script in probex/viz/ and run:
+    python viz/plot_crps_illustration.py
+
+Forecast values are denoted by x-hat; verifying values by x.
+The scores use the continuous Gaussian distribution, not a finite ensemble.
 """
 
 from pathlib import Path
@@ -12,9 +18,9 @@ from scipy.stats import norm
 
 
 mean = 41.0
-sd = 1.0                       
+sd = 1.0
 record = 40.0
-observed_record = 42.0
+observed_record = 43.0
 observed_nonrecord = 38.0
 
 root = Path(__file__).resolve().parents[1]
@@ -41,12 +47,11 @@ forecast = norm(loc=mean, scale=sd)
 left = min(mean - 4 * sd, observed_nonrecord - 2)
 right = max(mean + 4 * sd, observed_record + 2)
 
-
 jumps = np.array([record, observed_record, observed_nonrecord])
 z = np.unique(np.r_[np.linspace(left, right, 6000), jumps, jumps - 1e-8])
 F = forecast.cdf(z)
 H_record = (z >= observed_record).astype(float)
-F_censored = np.where(z < record, 0.0, F)
+F_clipped = np.where(z < record, 0.0, F)
 probability_below = forecast.cdf(record)
 probability_above = forecast.sf(record)
 
@@ -73,7 +78,7 @@ for observation in [observed_record, observed_nonrecord]:
     )
     assert np.isclose(whole, analytic, atol=1e-9)
 
-    # Check the equivalence with CRPS after censoring BOTH X and y.
+    # Check the equivalence with CRPS after clipping BOTH forecasts and verification.
     clipped_observation = max(observation, record)
     clipped_score = 0.0
     for a, b in zip(breaks[:-1], breaks[1:]):
@@ -87,7 +92,7 @@ for observation in [observed_record, observed_nonrecord]:
     assert np.isclose(tail, clipped_score, atol=1e-9)
     scores.append((whole, tail))
 
-assert scores[1][1] > 0 
+assert scores[1][1] > 0
 
 
 fig, axes = plt.subplots(2, 2, figsize=(9.2, 7.4))
@@ -113,20 +118,20 @@ ax.plot(z, H_record, color=ink, linestyle="--", linewidth=1.5)
 ax.set_ylabel("Cumulative probability")
 ax.legend(handles=[
     Line2D([0], [0], color=blue, linewidth=2.4, label="Forecast CDF"),
-    Line2D([0], [0], color=ink, linestyle="--", label="Observation"),
+    Line2D([0], [0], color=ink, linestyle="--", label="Verification"),
 ], loc="upper left", frameon=True, facecolor="white", edgecolor="none", framealpha=0.98)
-ax.text(0.04, 0.40,
-        f"$X\\sim\\mathcal{{N}}({mean:g}, {sd**2:g})$\n$R={record:g}$°C\n$y={observed_record:g}$°C",
-        transform=ax.transAxes, fontsize=11, color=ink, linespacing=1.6)
+ax.text(
+    0.04, 0.40,
+    rf"$\hat{{x}}\sim\mathcal{{N}}({mean:g}, {sd**2:g})$"
+    + f"\n$R={record:g}$°C\n$x={observed_record:g}$°C",
+    transform=ax.transAxes, fontsize=11, color=ink, linespacing=1.6,
+)
 
 ax = axes[0, 1]
-ax.set_title("(b) Censoring at the record", pad=14)
-ax.plot(z, F_censored, color=blue, linewidth=2.4)
+ax.set_title("(b) Clipping at the record", pad=14)
+ax.plot(z, F_clipped, color=blue, linewidth=2.4)
 ax.plot(z, H_record, color=ink, linestyle="--", linewidth=1.5)
 ax.set_ylabel("Cumulative probability")
-ax.text(0.04, 0.93, "$v_R(x)=\\max(x,R)$", transform=ax.transAxes,
-        va="top", color=ink, fontsize=12,
-        bbox=dict(facecolor="white", edgecolor="none", pad=2))
 ax.annotate(
     f"{probability_below:.0%} moved\nto the record",
     xy=(record, probability_below * 0.55), xytext=(left + 0.3, 0.42),
@@ -134,11 +139,12 @@ ax.annotate(
     arrowprops=dict(arrowstyle="->", color=record_color, lw=1.0),
 )
 ax.text(0.98, 0.19, "Tail\nunchanged", transform=ax.transAxes,
-        ha="right", color=blue, fontsize=11)
+        ha="right", color=blue, fontsize=11,
+        bbox=dict(facecolor="white", edgecolor="none", pad=2))
 
 for ax, observation, score, letter, title in zip(
     axes[1], [observed_record, observed_nonrecord], scores, ["c", "d"],
-    ["Record observed", "No record observed"],
+    ["Record exceeded", "Record not exceeded"],
 ):
     error = (F - (z >= observation).astype(float)) ** 2
     below = z <= record
@@ -147,14 +153,17 @@ for ax, observation, score, letter, title in zip(
     ax.fill_between(z[above], 0, error[above], color=blue, alpha=0.35)
     ax.plot(z[below], error[below], color="#7b8793", linewidth=1.7)
     ax.plot(z[above], error[above], color=blue, linewidth=2.0)
-    ax.set_title(f"({letter}) {title}: $y={observation:g}$°C", pad=14)
+    ax.set_title(f"({letter}) {title}: $x={observation:g}$°C", pad=14)
     ax.set_ylabel("Squared CDF error")
     # Put the non-record scores on the right so the text does not hide its peak.
     text_x = 0.04 if letter == "c" else 0.96
     text_align = "left" if letter == "c" else "right"
+    score_text = (
+        f"CRPS = {score[0]:.3f} K\n"
+        f"rtwCRPS = {score[1]:.3f} K"
+    )
     ax.text(
-        text_x, 0.92,
-        f"CRPS = {score[0]:.3f} K\nrtwCRPS = {score[1]:.3f} K",
+        text_x, 0.92, score_text,
         transform=ax.transAxes, va="top", ha=text_align, color=ink, fontsize=11,
         linespacing=1.5,
         bbox=dict(facecolor="white", edgecolor="none", alpha=0.93, pad=3),
@@ -182,4 +191,4 @@ plt.close(fig)
 
 print(f"Forecast probability above the record: {probability_above:.3f}")
 for observation, (whole, tail) in zip([observed_record, observed_nonrecord], scores):
-    print(f"y={observation:g}°C: CRPS={whole:.6f} K; rtwCRPS={tail:.6f} K")
+    print(f"x={observation:g}°C: CRPS={whole:.6f} K; rtwCRPS={tail:.6f} K")
